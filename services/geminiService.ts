@@ -2,7 +2,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AIRealEstateContent, PropertyData } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = (window as any).ENV?.VITE_GEMINI_API_KEY && (window as any).ENV.VITE_GEMINI_API_KEY !== '__VITE_GEMINI_API_KEY__'
+  ? (window as any).ENV.VITE_GEMINI_API_KEY
+  : import.meta.env.VITE_GEMINI_API_KEY || '';
+
+const ai = new GoogleGenAI({ apiKey });
 
 const sanitizeForPDF = (text: string): string => {
   if (!text) return "";

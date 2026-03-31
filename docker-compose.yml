@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  imobiauto:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app-imoveis
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      - API_KEY=${API_KEY}

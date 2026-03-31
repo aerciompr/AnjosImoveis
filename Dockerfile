@@ -25,5 +25,12 @@ COPY --from=builder /app/dist /usr/share/nginx/html/
 # Expõe a porta 80
 EXPOSE 80
 
+# Copia o script de entrypoint
+COPY docker-entrypoint.sh /
+RUN chmod +x /docker-entrypoint.sh
+
+# Define o script como entrypoint
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
 # Inicia o Nginx
 CMD ["nginx", "-g", "daemon off;"]

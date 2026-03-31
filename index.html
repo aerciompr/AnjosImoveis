@@ -6,6 +6,9 @@
     <title>ImobiAuto Creator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+        window.ENV = {
+            VITE_GEMINI_API_KEY: "__VITE_GEMINI_API_KEY__"
+        };
         tailwind.config = {
             theme: {
                 extend: {
