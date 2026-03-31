@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ImobiAuto Creator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0f172a',
+                        secondary: '#334155',
+                        accent: '#3b82f6',
+                    },
+                    screens: {
+                        'print': {'raw': 'print'},
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
+      
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f8fafc;
+      }
+
+      /* ESTILOS CRÍTICOS DE IMPRESSÃO */
+      @media print {
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+        
+        /* FORÇA A IMPRESSÃO DE CORES DE FUNDO */
+        * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+        }
+        
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: white !important;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Garante que o container de impressão ocupe tudo */
+        .print-only-container {
+            display: block !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: white;
+            z-index: 9999;
+        }
+        
+        /* Quebras de página */
+        .print-page {
+            break-after: page;
+            page-break-after: always;
+            page-break-inside: avoid;
+        }
+        
+        /* Esconde elementos da interface durante impressão */
+        .no-print, header, button {
+            display: none !important;
+        }
+      }
+    </style>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "Gerador PDF Marcelo dos Anjos - Anjos Imóveis",
+  "description": "Automatize a criação de PDFs imobiliários: Aplique logomarcas em fotos e gere descrições profissionais com IA.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
