@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Upload, Image as ImageIcon, Trash2, XCircle, Sparkles, Loader2, Video as VideoIcon, Film, Archive, FileType } from 'lucide-react';
+import { Upload, Image as ImageIcon, Trash2, XCircle, Sparkles, Loader2, Video as VideoIcon, Film, Archive, FileType, ChevronLeft, ChevronRight } from 'lucide-react';
 import { enhanceImageWithAI } from '../services/geminiService';
 import { readFileAsDataURL, extractUniqueFramesFromVideo, extractFilesFromZip } from '../utils/imageProcessing';
 import { extractDataFromPDF } from '../utils/pdfExtractor';
@@ -148,6 +148,22 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
     if(confirm('Remover todas as fotos?')) setPhotos([]);
   }
 
+  const movePhoto = (index: number, direction: 'left' | 'right') => {
+    if (direction === 'left' && index > 0) {
+      const newPhotos = [...photos];
+      const temp = newPhotos[index];
+      newPhotos[index] = newPhotos[index - 1];
+      newPhotos[index - 1] = temp;
+      setPhotos(newPhotos);
+    } else if (direction === 'right' && index < photos.length - 1) {
+      const newPhotos = [...photos];
+      const temp = newPhotos[index];
+      newPhotos[index] = newPhotos[index + 1];
+      newPhotos[index + 1] = temp;
+      setPhotos(newPhotos);
+    }
+  };
+
   const handleEnhance = async (idx: number) => {
     const file = photos[idx];
     setEnhancingIndex(idx);
@@ -239,21 +255,42 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
                         </div>
                     )}
 
-                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex flex-col items-center justify-center gap-2">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleEnhance(idx); }}
-                          disabled={enhancingIndex === idx}
-                          className="bg-blue-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition shadow-lg hover:bg-blue-700"
-                          title="Melhorar Qualidade com IA"
-                        >
-                          {enhancingIndex === idx ? <Loader2 size={16} className="animate-spin"/> : <Sparkles size={16}/>}
-                        </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); removePhoto(idx); }}
-                          className="bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition shadow-lg hover:bg-red-600"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex flex-col items-center justify-center gap-2">
+                        <div className="flex gap-2">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); movePhoto(idx, 'left'); }}
+                              disabled={idx === 0}
+                              className={`p-1.5 rounded-full transition shadow-lg ${idx === 0 ? 'bg-slate-400/50 text-white/50 cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700'} opacity-0 group-hover:opacity-100`}
+                              title="Mover para trás"
+                            >
+                              <ChevronLeft size={16}/>
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); movePhoto(idx, 'right'); }}
+                              disabled={idx === photos.length - 1}
+                              className={`p-1.5 rounded-full transition shadow-lg ${idx === photos.length - 1 ? 'bg-slate-400/50 text-white/50 cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700'} opacity-0 group-hover:opacity-100`}
+                              title="Mover para frente"
+                            >
+                              <ChevronRight size={16}/>
+                            </button>
+                        </div>
+                        <div className="flex gap-2">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleEnhance(idx); }}
+                              disabled={enhancingIndex === idx}
+                              className="bg-blue-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition shadow-lg hover:bg-blue-700"
+                              title="Melhorar Qualidade com IA"
+                            >
+                              {enhancingIndex === idx ? <Loader2 size={16} className="animate-spin"/> : <Sparkles size={16}/>}
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); removePhoto(idx); }}
+                              className="bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition shadow-lg hover:bg-red-600"
+                              title="Remover foto"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                        </div>
                     </div>
                     {enhancingIndex === idx && (
                       <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
