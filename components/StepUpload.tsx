@@ -32,27 +32,34 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
       const pdfsToProcess: File[] = [];
 
       try {
-          // 1. Expand ZIPs
-          const expandedFiles: File[] = [];
-          for (const file of filesToProcess) {
-              if (file.name.toLowerCase().endsWith('.zip') || file.type.includes('zip') || file.type.includes('compressed')) {
-                  try {
-                    setProcessingStatus(`Extraindo ZIP: ${file.name}...`);
-                    const extracted = await extractFilesFromZip(file);
-                    if (extracted.length === 0) {
-                        alert(`O arquivo ZIP "${file.name}" não contém imagens ou vídeos válidos.`);
-                    } else {
-                        expandedFiles.push(...extracted);
-                    }
-                  } catch (err) {
-                      alert(`Erro ao abrir ZIP "${file.name}". Certifique-se que é um arquivo válido.`);
+          // 1. Expand ZIPs (Recursive)
+          const expandZips = async (files: File[]): Promise<File[]> => {
+              const result: File[] = [];
+              for (const file of files) {
+                  const isZip = file.name.toLowerCase().endsWith('.zip') || 
+                                file.type.includes('zip') || 
+                                file.type.includes('compressed');
+                  
+                  if (isZip) {
+                      setProcessingStatus(`Extraindo ZIP: ${file.name}...`);
+                      try {
+                          const extracted = await extractFilesFromZip(file);
+                          // Recurse to find zips inside zips
+                          const nested = await expandZips(extracted);
+                          result.push(...nested);
+                      } catch (err) {
+                          console.error("ZIP Error", err);
+                          // If it fails, we keep the file as is (maybe it's not a real zip)
+                          result.push(file);
+                      }
+                  } else {
+                      result.push(file);
                   }
-              } else {
-                  expandedFiles.push(file);
               }
-          }
-          
-          filesToProcess = expandedFiles;
+              return result;
+          };
+
+          filesToProcess = await expandZips(files);
 
           // 2. Sort into Types
           for (const file of filesToProcess) {
@@ -265,6 +272,15 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
                 </p>
              </>
           )}
+        </div>
+
+        {/* Google Drive Tip */}
+        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-start gap-3">
+            <Sparkles className="text-blue-500 shrink-0 mt-0.5" size={16} />
+            <div className="text-xs text-blue-800">
+                <p className="font-bold mb-1">Dica para Google Drive:</p>
+                <p>Baixe a pasta do Drive como um arquivo <strong>ZIP</strong> e arraste-o aqui. O sistema extrairá automaticamente todas as fotos, vídeos e PDFs (incluindo HEIC de iPhones).</p>
+            </div>
         </div>
 
         {photos.length > 0 && (

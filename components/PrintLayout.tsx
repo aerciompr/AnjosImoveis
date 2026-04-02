@@ -91,7 +91,7 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
               currentPageSections.push({
                   title: sectionTitleAdded ? `${section.title} (Cont.)` : section.title,
                   content: currentSectionContent,
-                  isList: section.isList
+                  isList: section.isList || false
               });
               sectionTitleAdded = true;
               currentSectionContent = [];

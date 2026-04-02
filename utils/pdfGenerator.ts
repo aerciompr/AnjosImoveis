@@ -84,7 +84,7 @@ export const generateRealEstatePDF = async (data: PropertyData, images: string[]
   let currentY = 18;
   const checkPageBreak = (heightNeeded: number) => {
     if (currentY + heightNeeded > pageHeight - 15) {
-      drawFooter(doc.internal.getNumberOfPages());
+      drawFooter(doc.getNumberOfPages());
       doc.addPage();
       drawHeaderBar();
       currentY = 18;

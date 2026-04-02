@@ -38,17 +38,25 @@ const StepDetails: React.FC<StepDetailsProps> = ({ data, setData, onBack, onNext
     if (!rawInput.trim()) return;
     setIsImporting(true);
     
-    // Call the new service that parses raw text
-    const extractedData = await parseRawListing(rawInput);
-    
-    if (extractedData) {
-      setData(extractedData);
-      setShowImporter(false); 
-    } else {
-      alert("Não foi possível extrair dados. Tente preencher manualmente.");
+    try {
+      // Call the new service that parses raw text
+      const extractedData = await parseRawListing(rawInput);
+      
+      if (extractedData) {
+        setData(extractedData);
+        // If units are found, we don't hide the importer yet so the user can see the table
+        if (!extractedData.units || extractedData.units.length === 0) {
+          setShowImporter(false); 
+        }
+      } else {
+        alert("Não foi possível extrair dados. Tente preencher manualmente.");
+      }
+    } catch (error) {
+      console.error("Smart Import Error:", error);
+      alert("Ocorreu um erro ao processar os dados. Tente novamente.");
+    } finally {
+      setIsImporting(false);
     }
-    
-    setIsImporting(false);
   };
 
   const handleGenerateContent = async () => {
@@ -70,10 +78,10 @@ const StepDetails: React.FC<StepDetailsProps> = ({ data, setData, onBack, onNext
         }
 
         const aiContent = await generatePDFContent(
-            data.title, 
-            data.location, 
-            data.features, 
-            data.description,
+            data.title || "", 
+            data.location || "", 
+            data.features || "", 
+            data.description || "",
             photoPreviews // Pass images
         );
         

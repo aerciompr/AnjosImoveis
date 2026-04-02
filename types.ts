@@ -15,6 +15,22 @@ export interface AIRealEstateContent {
   locationHighlight: string;
 }
 
+export interface UnitData {
+  unit: string;
+  floor: string;
+  view: string;
+  area: string;
+  status: string;
+  price: string;
+  paymentPlan?: {
+    ato: string;
+    sinal: string;
+    mensais: string;
+    semestrais: string;
+    financiamento: string;
+  };
+}
+
 export interface PropertyData {
   title: string;
   price: string;
@@ -22,6 +38,7 @@ export interface PropertyData {
   features: string;
   description: string;
   aiContent?: AIRealEstateContent;
+  units?: UnitData[];
 }
 
 export interface ProcessedImage {

@@ -2,13 +2,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AIRealEstateContent, PropertyData } from "../types";
 
-const apiKey = (window as any).ENV?.VITE_GEMINI_API_KEY && (window as any).ENV.VITE_GEMINI_API_KEY !== '__VITE_GEMINI_API_KEY__'
-  ? (window as any).ENV.VITE_GEMINI_API_KEY
-  : import.meta.env.VITE_GEMINI_API_KEY || '';
+const getAI = () => {
+  const apiKey = (window as any).ENV?.VITE_GEMINI_API_KEY && (window as any).ENV.VITE_GEMINI_API_KEY !== '__VITE_GEMINI_API_KEY__'
+    ? (window as any).ENV.VITE_GEMINI_API_KEY
+    : (import.meta as any).env.VITE_GEMINI_API_KEY || '';
+  return new GoogleGenAI({ apiKey });
+};
 
-const ai = new GoogleGenAI({ apiKey });
-
-const sanitizeForPDF = (text: string): string => {
+const sanitizeForPDF = (text: string | undefined | null): string => {
   if (!text) return "";
   return text
     .replace(/[“”]/g, '"')
@@ -46,8 +47,15 @@ const imageToPart = (base64Data: string) => {
 
 export const parseRawListing = async (rawText: string): Promise<PropertyData | null> => {
   try {
+    const ai = getAI();
     const prompt = `
-      Analise este texto bruto de anúncio imobiliário e extraia os dados.
+      Analise este texto bruto e extraia os dados do imóvel. 
+      O texto pode ser um anúncio de marketing OU uma tabela de preços.
+      
+      REGRAS ESPECIAIS:
+      1. Se houver múltiplos preços (tabela), identifique o MENOR valor e defina o campo 'price' como "A PARTIR DE R$ [valor]".
+      2. Não detalhe as unidades individualmente no campo 'description' ou 'features', apenas use os dados gerais.
+      
       Texto: "${rawText}"
     `;
 
@@ -64,6 +72,30 @@ export const parseRawListing = async (rawText: string): Promise<PropertyData | n
             location: { type: Type.STRING },
             features: { type: Type.STRING },
             description: { type: Type.STRING },
+            units: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  unit: { type: Type.STRING },
+                  floor: { type: Type.STRING },
+                  view: { type: Type.STRING },
+                  area: { type: Type.STRING },
+                  status: { type: Type.STRING },
+                  price: { type: Type.STRING },
+                  paymentPlan: {
+                    type: Type.OBJECT,
+                    properties: {
+                      ato: { type: Type.STRING },
+                      sinal: { type: Type.STRING },
+                      mensais: { type: Type.STRING },
+                      semestrais: { type: Type.STRING },
+                      financiamento: { type: Type.STRING }
+                    }
+                  }
+                }
+              }
+            },
             aiContent: {
               type: Type.OBJECT,
               properties: {
@@ -88,24 +120,40 @@ export const parseRawListing = async (rawText: string): Promise<PropertyData | n
       }
     });
 
-    const data = JSON.parse(response.text);
+    const data = JSON.parse(response.text || '{}');
     return {
       title: sanitizeForPDF(data.title),
       price: sanitizeForPDF(data.price),
       location: sanitizeForPDF(data.location),
       features: sanitizeForPDF(data.features),
       description: sanitizeForPDF(data.description),
-      aiContent: {
+      units: data.units?.map((u: any) => ({
+        ...u,
+        unit: sanitizeForPDF(u.unit),
+        floor: sanitizeForPDF(u.floor),
+        view: sanitizeForPDF(u.view),
+        area: sanitizeForPDF(u.area),
+        status: sanitizeForPDF(u.status),
+        price: sanitizeForPDF(u.price),
+        paymentPlan: u.paymentPlan ? {
+          ato: sanitizeForPDF(u.paymentPlan.ato),
+          sinal: sanitizeForPDF(u.paymentPlan.sinal),
+          mensais: sanitizeForPDF(u.paymentPlan.mensais),
+          semestrais: sanitizeForPDF(u.paymentPlan.semestrais),
+          financiamento: sanitizeForPDF(u.paymentPlan.financiamento)
+        } : undefined
+      })),
+      aiContent: data.aiContent ? {
         marketingTitle: sanitizeForPDF(data.aiContent.marketingTitle),
         headline: sanitizeForPDF(data.aiContent.headline),
-        coverHighlights: data.aiContent.coverHighlights?.map(sanitizeForPDF) || [],
-        sections: data.aiContent.sections.map((s: any) => ({
+        coverHighlights: data.aiContent.coverHighlights?.map((h: any) => sanitizeForPDF(h)) || [],
+        sections: data.aiContent.sections?.map((s: any) => ({
           ...s,
           title: sanitizeForPDF(s.title),
-          content: s.content.map(sanitizeForPDF)
-        })),
+          content: s.content?.map((c: any) => sanitizeForPDF(c)) || []
+        })) || [],
         locationHighlight: sanitizeForPDF(data.location)
-      }
+      } : undefined
     };
   } catch (error) {
     console.error("Gemini Content Error:", error);
@@ -121,6 +169,7 @@ export const generatePDFContent = async (
     images: string[] = [] 
 ): Promise<AIRealEstateContent | null> => {
   try {
+    const ai = getAI();
     const parts = [];
     
     // Add Images first (up to 4 for better context)
@@ -179,16 +228,16 @@ export const generatePDFContent = async (
       }
     });
 
-    const data = JSON.parse(response.text);
+    const data = JSON.parse(response.text || '{}');
     return {
       marketingTitle: sanitizeForPDF(data.marketingTitle),
       headline: sanitizeForPDF(data.headline),
-      coverHighlights: data.coverHighlights?.map(sanitizeForPDF) || [],
-      sections: data.sections.map((s: any) => ({
+      coverHighlights: data.coverHighlights?.map((h: any) => sanitizeForPDF(h)) || [],
+      sections: data.sections?.map((s: any) => ({
         ...s,
         title: sanitizeForPDF(s.title),
-        content: s.content.map(sanitizeForPDF)
-      })),
+        content: s.content?.map((c: any) => sanitizeForPDF(c)) || []
+      })) || [],
       locationHighlight: sanitizeForPDF(location)
     };
   } catch (error) {
@@ -199,6 +248,7 @@ export const generatePDFContent = async (
 
 export const enhanceImageWithAI = async (base64Image: string): Promise<string | null> => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {

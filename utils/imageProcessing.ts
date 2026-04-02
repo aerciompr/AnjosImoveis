@@ -1,6 +1,7 @@
 
 import { WatermarkSettings, ImageDimensions } from '../types';
 import JSZip from 'jszip';
+import heic2any from 'heic2any';
 
 export const readFileAsDataURL = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -162,23 +163,51 @@ export const extractFilesFromZip = async (zipFile: File): Promise<File[]> => {
     try {
         const content = await zip.loadAsync(zipFile);
         
-        // Filter out directories and hidden files
-        const entries = Object.values(content.files).filter((entry: any) => !entry.dir && !entry.name.startsWith('__MACOSX') && !entry.name.startsWith('.'));
+        // Filter out directories and hidden files/folders
+        const entries = Object.values(content.files).filter((entry: any) => {
+            if (entry.dir) return false;
+            const pathParts = entry.name.split('/');
+            // Ignore if any part of the path starts with . or __MACOSX
+            return !pathParts.some((part: string) => part.startsWith('.') || part.startsWith('__MACOSX'));
+        });
         
         const promises = entries.map(async (entry: any) => {
             const name = entry.name.toLowerCase();
-            const isImage = /\.(jpg|jpeg|png|webp|gif)$/.test(name);
-            const isVideo = /\.(mp4|mov|webm|m4v)$/.test(name);
+            const isImage = /\.(jpg|jpeg|png|webp|gif|heic|heif|bmp|tiff)$/.test(name);
+            const isVideo = /\.(mp4|mov|webm|m4v|avi|mkv|wmv|flv)$/.test(name);
+            const isPdf = /\.pdf$/.test(name);
 
-            if (isImage || isVideo) {
-                const blob = await entry.async('blob');
-                // Reconstruct mime type roughly
+            if (isImage || isVideo || isPdf) {
+                let blob = await entry.async('blob');
                 let type = 'application/octet-stream';
-                if (isImage) type = name.endsWith('png') ? 'image/png' : 'image/jpeg';
-                if (isVideo) type = 'video/mp4'; 
+                let fileName = entry.name.split('/').pop() || entry.name;
                 
-                // Use the base filename (remove paths if zip has folders)
-                const fileName = entry.name.split('/').pop() || entry.name;
+                if (isImage) {
+                    // Convert HEIC to JPEG if needed
+                    if (name.endsWith('heic') || name.endsWith('heif')) {
+                        try {
+                            const convertedBlob = await heic2any({
+                                blob,
+                                toType: "image/jpeg",
+                                quality: 0.7
+                            });
+                            blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+                            type = 'image/jpeg';
+                            fileName = fileName.replace(/\.(heic|heif)$/i, '.jpg');
+                        } catch (e) {
+                            console.warn("HEIC conversion failed", e);
+                            type = 'image/jpeg'; // Fallback
+                        }
+                    } else if (name.endsWith('png')) type = 'image/png';
+                    else if (name.endsWith('webp')) type = 'image/webp';
+                    else if (name.endsWith('gif')) type = 'image/gif';
+                    else type = 'image/jpeg';
+                } else if (isVideo) {
+                    type = 'video/mp4'; 
+                } else if (isPdf) {
+                    type = 'application/pdf';
+                }
+                
                 validFiles.push(new File([blob], fileName, { type }));
             }
         });
@@ -278,7 +307,7 @@ export const extractUniqueFramesFromVideo = async (
             // 1. Check similarity against existing photos AND newly extracted ones
             const currentThumb = await getThumbData(dataUrl);
             let isDuplicate = false;
-            const SIMILARITY_THRESHOLD = 150; // Lower means stricter (more similar)
+            const SIMILARITY_THRESHOLD = 300; // Higher means more lenient (less similar to be called duplicate)
 
             // Check against existing user photos
             for (const thumb of existingThumbs) {
