@@ -3,8 +3,8 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY . .
 
-# Instala as dependências do projeto
-RUN npm install
+# Instala as dependências do projeto (sem exibir avisos de auditoria e fundos)
+RUN npm install --no-audit --no-fund --loglevel=error
 
 # Compila o projeto (transforma o código React/TypeScript em HTML e JS puros)
 RUN npm run build

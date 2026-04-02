@@ -19,13 +19,14 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
   const [enhancingIndex, setEnhancingIndex] = useState<number | null>(null);
   const [isProcessingVideo, setIsProcessingVideo] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
+  const processFiles = async (files: File[]) => {
+    if (files.length > 0) {
       setIsProcessingVideo(true);
       setProcessingStatus('Analisando arquivos...');
       
-      let filesToProcess: File[] = Array.from(e.target.files);
+      let filesToProcess: File[] = files;
       const newPhotos: File[] = [];
       const videosToProcess: File[] = [];
       const pdfsToProcess: File[] = [];
@@ -132,6 +133,30 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await processFiles(Array.from(e.target.files));
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processFiles(Array.from(e.dataTransfer.files));
+    }
+  };
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setLogo(e.target.files[0]);
@@ -204,7 +229,12 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
         
         <div 
           onClick={() => photoInputRef.current?.click()}
-          className={`border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:bg-slate-50 transition cursor-pointer flex flex-col items-center justify-center min-h-[140px] relative ${isProcessingVideo ? 'opacity-50 pointer-events-none' : ''}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition cursor-pointer flex flex-col items-center justify-center min-h-[140px] relative 
+            ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300 hover:bg-slate-50'} 
+            ${isProcessingVideo ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <input 
             type="file" 
