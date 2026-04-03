@@ -176,8 +176,9 @@ export const extractFilesFromZip = async (zipFile: File): Promise<File[]> => {
             const isImage = /\.(jpg|jpeg|png|webp|gif|heic|heif|bmp|tiff)$/.test(name);
             const isVideo = /\.(mp4|mov|webm|m4v|avi|mkv|wmv|flv)$/.test(name);
             const isPdf = /\.pdf$/.test(name);
+            const isText = /\.(txt|rtf|doc|docx)$/.test(name);
 
-            if (isImage || isVideo || isPdf) {
+            if (isImage || isVideo || isPdf || isText) {
                 let blob = await entry.async('blob');
                 let type = 'application/octet-stream';
                 let fileName = entry.name.split('/').pop() || entry.name;
@@ -206,6 +207,10 @@ export const extractFilesFromZip = async (zipFile: File): Promise<File[]> => {
                     type = 'video/mp4'; 
                 } else if (isPdf) {
                     type = 'application/pdf';
+                } else if (isText) {
+                    if (name.endsWith('txt')) type = 'text/plain';
+                    else if (name.endsWith('rtf')) type = 'application/rtf';
+                    else type = 'application/msword';
                 }
                 
                 validFiles.push(new File([blob], fileName, { type }));

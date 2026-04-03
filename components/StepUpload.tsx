@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { Upload, Image as ImageIcon, Trash2, XCircle, Sparkles, Loader2, Video as VideoIcon, Film, Archive, FileType, ChevronLeft, ChevronRight } from 'lucide-react';
-import { enhanceImageWithAI } from '../services/geminiService';
-import { readFileAsDataURL, extractUniqueFramesFromVideo, extractFilesFromZip } from '../utils/imageProcessing';
+import { Upload, Image as ImageIcon, Trash2, XCircle, Sparkles, Loader2, Video as VideoIcon, Film, Archive, FileType, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { enhanceImageWithAI, filterRealEstateImages, rankRealEstateImages } from '../services/geminiService';
+import { readFileAsDataURL, extractUniqueFramesFromVideo, extractFilesFromZip, resizeImageForAI } from '../utils/imageProcessing';
 import { extractDataFromPDF } from '../utils/pdfExtractor';
 
 interface StepUploadProps {
@@ -20,6 +20,7 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
   const [isProcessingVideo, setIsProcessingVideo] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
+  const [hasExtractedData, setHasExtractedData] = useState(false);
 
   const processFiles = async (files: File[]) => {
     if (files.length > 0) {
@@ -30,6 +31,8 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
       const newPhotos: File[] = [];
       const videosToProcess: File[] = [];
       const pdfsToProcess: File[] = [];
+      const textFilesToProcess: File[] = [];
+      const pdfImagesToProcess: File[] = [];
 
       try {
           // 1. Expand ZIPs (Recursive)
@@ -69,18 +72,17 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
                   videosToProcess.push(file);
               } else if (file.type === 'application/pdf') {
                   pdfsToProcess.push(file);
+              } else if (file.type === 'text/plain' || file.type === 'application/rtf' || file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.rtf')) {
+                  textFilesToProcess.push(file);
               }
           }
 
-          // 3. Add Images immediately
-          if (newPhotos.length > 0) {
-            setPhotos((prev) => [...prev, ...newPhotos]);
-          }
-
+          // 3. Add Images immediately (REMOVED - Now filtered first)
+          
           // 4. Process Videos
+          let extractedFrames: File[] = [];
           if (videosToProcess.length > 0) {
               setProcessingStatus('Extraindo frames dos vídeos...');
-              let extractedFrames: File[] = [];
               let currentPool: File[] = [...photos, ...newPhotos];
 
               for (const video of videosToProcess) {
@@ -93,9 +95,7 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
                   }
               }
 
-              if (extractedFrames.length > 0) {
-                   setPhotos((prev) => [...prev, ...extractedFrames]);
-              }
+              // (REMOVED - Now filtered first)
           }
 
           // 5. Process PDFs
@@ -105,28 +105,105 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
                 try {
                     const { text, images } = await extractDataFromPDF(pdf);
                     
-                    // Add images extracted from PDF
+                    // Collect images for later filtering
                     if (images.length > 0) {
-                        setPhotos((prev) => [...prev, ...images]);
+                        pdfImagesToProcess.push(...images);
                     }
 
                     // Send text to App state
                     if (text && text.trim().length > 0) {
                         onPdfTextExtracted(text);
-                        alert(`PDF Lido com Sucesso!\n- ${images.length} fotos extraídas.\n- Texto copiado para a próxima etapa.`);
-                    } else if (images.length > 0) {
-                         alert(`PDF Lido: ${images.length} fotos extraídas.`);
+                        setHasExtractedData(true);
                     }
-
                 } catch (err) {
                     console.error("Erro ao ler PDF", err);
-                    alert(`Erro ao processar o PDF ${pdf.name}.`);
                 }
              }
           }
 
-          if (newPhotos.length === 0 && videosToProcess.length === 0 && pdfsToProcess.length === 0 && filesToProcess.length > 0) {
-              alert("Nenhum arquivo compatível encontrado (Imagem, Vídeo, ZIP ou PDF).");
+          // 6. Process Text Files
+          if (textFilesToProcess.length > 0) {
+              setProcessingStatus('Lendo arquivos de texto...');
+              let combinedText = '';
+              for (const txt of textFilesToProcess) {
+                  try {
+                      const content = await txt.text();
+                      if (content.trim()) {
+                          combinedText += `\n--- Arquivo: ${txt.name} ---\n${content}\n`;
+                      }
+                  } catch (e) {
+                      console.error("Error reading text file", e);
+                  }
+              }
+              if (combinedText) {
+                  onPdfTextExtracted(combinedText);
+                  setHasExtractedData(true);
+              }
+          }
+
+              // 7. SMART FILTER: Filter out junk images (logos, textures, etc.)
+          const allExtractedPhotos = [...newPhotos, ...extractedFrames, ...pdfImagesToProcess];
+          if (allExtractedPhotos.length > 0) {
+              setProcessingStatus('Filtrando e organizando fotos (IA)...');
+              
+              // Process in batches of 15 for safety and performance
+              const batchSize = 15;
+              let filteredPhotos: File[] = [];
+              
+              for (let i = 0; i < allExtractedPhotos.length; i += batchSize) {
+                  const batch = allExtractedPhotos.slice(i, i + batchSize);
+                  const base64Batch = await Promise.all(batch.map(f => resizeImageForAI(f, 512))); // Small size for filtering
+                  const validIndices = await filterRealEstateImages(base64Batch);
+                  
+                  validIndices.forEach(idx => {
+                      if (idx < batch.length) {
+                          filteredPhotos.push(batch[idx]);
+                      }
+                  });
+              }
+
+              // 8. RANKING: Sort filtered photos by importance
+              if (filteredPhotos.length > 0) {
+                  try {
+                      // Rank only the first 20 images to avoid too many parts in a single request
+                      const rankBatch = filteredPhotos.slice(0, 20);
+                      const base64RankBatch = await Promise.all(rankBatch.map(f => resizeImageForAI(f, 512)));
+                      const sortedIndices = await rankRealEstateImages(base64RankBatch);
+                      
+                      const sortedPhotos: File[] = [];
+                      const usedIndices = new Set<number>();
+                      
+                      sortedIndices.forEach(idx => {
+                          if (idx < rankBatch.length && !usedIndices.has(idx)) {
+                              sortedPhotos.push(rankBatch[idx]);
+                              usedIndices.add(idx);
+                          }
+                      });
+                      
+                      // Add remaining images that weren't in the top 20 or weren't ranked
+                      filteredPhotos.forEach((file, idx) => {
+                          if (idx >= 20 || !usedIndices.has(idx)) {
+                              sortedPhotos.push(file);
+                          }
+                      });
+                      
+                      filteredPhotos = sortedPhotos;
+                  } catch (e) {
+                      console.error("Ranking error", e);
+                  }
+              }
+              
+              // Update photos with ONLY the filtered and sorted ones
+              setPhotos((prev) => [...prev, ...filteredPhotos]);
+              
+              const removedCount = allExtractedPhotos.length - filteredPhotos.length;
+              if (removedCount > 0) {
+                  console.log(`IA removeu ${removedCount} imagens irrelevantes (logos, texturas, etc).`);
+              }
+          }
+
+          if (newPhotos.length === 0 && videosToProcess.length === 0 && pdfsToProcess.length === 0 && textFilesToProcess.length === 0 && filesToProcess.length > 0) {
+              alert("Nenhum arquivo compatível encontrado (Imagem, Vídeo, ZIP, PDF ou Texto).");
           }
 
       } catch (error) {
@@ -268,11 +345,24 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
                 </div>
                 <p className="text-slate-600 font-medium text-lg">Adicionar Fotos, Vídeo, PDF ou ZIP</p>
                 <p className="text-slate-400 text-sm mt-1 max-w-sm mx-auto">
-                    Arraste ou clique. PDFs serão lidos automaticamente (texto e fotos extraídas).
-                </p>
-             </>
+                Arraste ou clique. PDFs e arquivos de texto serão lidos automaticamente para extrair dados.
+            </p>
+            </>
           )}
         </div>
+
+        {/* Data Extraction Success Indicator */}
+        {hasExtractedData && (
+            <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-100 flex items-center gap-3 animate-bounce-subtle">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white shadow-sm">
+                    <FileText size={16} />
+                </div>
+                <div className="text-xs text-green-800">
+                    <p className="font-bold">Dados Extraídos com Sucesso!</p>
+                    <p>As informações do imóvel foram capturadas e estarão prontas na próxima etapa.</p>
+                </div>
+            </div>
+        )}
 
         {/* Google Drive Tip */}
         <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-start gap-3">

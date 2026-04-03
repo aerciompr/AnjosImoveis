@@ -77,10 +77,10 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
   let currentPageSections: { title: string; content: string[]; isList: boolean }[] = [];
   let currentSpaceUsed = 0;
   
-  // Use a conservative estimate for available space
-  // 1 unit = roughly 1 line of text + margin
-  const PAGE_1_MAX_UNITS = 20; 
-  const PAGE_N_MAX_UNITS = 42;
+  // Use a more aggressive estimate for available space to maximize first page
+  // 1 unit = roughly 1 line of text
+  const PAGE_1_MAX_UNITS = 35; // Increased from 20
+  const PAGE_N_MAX_UNITS = 45; // Increased from 42
 
   ai.sections.forEach((section) => {
       let sectionTitleAdded = false;
@@ -98,7 +98,7 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
           }
       };
 
-      const titleUnits = 3; // Title takes about 3 lines of space
+      const titleUnits = 2; // Title takes about 2 lines of space
       
       const maxAllowed = textPages.length === 0 ? PAGE_1_MAX_UNITS : PAGE_N_MAX_UNITS;
       
@@ -112,9 +112,9 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
 
       section.content.forEach((item) => {
           // Estimate lines this item will take. 
-          // A typical line might hold 60-70 characters in this layout.
-          const lines = Math.ceil(item.length / 60); 
-          const itemUnits = section.isList ? lines : lines + 1; // Add 1 for paragraph spacing
+          // A typical line might hold 85-90 characters in this layout.
+          const lines = Math.ceil(item.length / 85); 
+          const itemUnits = section.isList ? lines : lines + 0.5; // Less spacing for paragraphs
           
           const currentMaxAllowed = textPages.length === 0 ? PAGE_1_MAX_UNITS : PAGE_N_MAX_UNITS;
 
@@ -132,7 +132,7 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
       });
       
       addSectionToPage();
-      currentSpaceUsed += 2; // Bottom margin after section
+      currentSpaceUsed += 1; // Less margin after section
   });
 
   if (currentPageSections.length > 0) {

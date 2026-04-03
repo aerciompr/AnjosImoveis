@@ -267,3 +267,122 @@ export const enhanceImageWithAI = async (base64Image: string): Promise<string | 
     return null;
   }
 };
+
+export const filterRealEstateImages = async (base64Images: string[]): Promise<number[]> => {
+  if (base64Images.length === 0) return [];
+  
+  try {
+    const ai = getAI();
+    const parts: any[] = [];
+    
+    base64Images.forEach((base64, index) => {
+      parts.push({ text: `Imagem ${index}:` });
+      parts.push({
+        inlineData: {
+          data: base64.split(',')[1],
+          mimeType: 'image/jpeg'
+        }
+      });
+    });
+
+    parts.push({
+      text: `
+        Analise estas imagens de um lote de arquivos imobiliários.
+        Identifique APENAS as fotos reais do imóvel (interiores, fachada, áreas comuns, lazer, vista).
+        
+        IGNORE E REJEITE:
+        - Logotipos de construtoras ou imobiliárias.
+        - Fotos de texturas (amostras de piso, parede, tecidos).
+        - Gráficos de marketing, plantas baixas humanizadas ou diagramas.
+        - Fotos de pessoas ou equipe.
+        - Fotos repetidas ou muito similares.
+        
+        Retorne um JSON com o array 'validIndices' contendo os números das imagens que devem ser mantidas.
+      `
+    });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            validIndices: {
+              type: Type.ARRAY,
+              items: { type: Type.INTEGER }
+            }
+          },
+          required: ["validIndices"]
+        }
+      }
+    });
+
+    const result = JSON.parse(response.text || '{"validIndices": []}');
+    return result.validIndices || [];
+  } catch (error) {
+    console.error("Filter Images Error:", error);
+    // If AI fails, return all indices as fallback to avoid losing data
+    return base64Images.map((_, i) => i);
+  }
+};
+
+export const rankRealEstateImages = async (base64Images: string[]): Promise<number[]> => {
+  if (base64Images.length === 0) return [];
+  
+  try {
+    const ai = getAI();
+    const parts: any[] = [];
+    
+    base64Images.forEach((base64, index) => {
+      parts.push({ text: `Imagem ${index}:` });
+      parts.push({
+        inlineData: {
+          data: base64.split(',')[1],
+          mimeType: 'image/jpeg'
+        }
+      });
+    });
+
+    parts.push({
+      text: `
+        Ordene estas imagens imobiliárias da mais importante para a menos importante para um anúncio de venda.
+        
+        CRITÉRIOS DE ORDENAÇÃO:
+        1. Fachada Principal ou Vista Principal (A "Foto de Capa").
+        2. Sala de Estar / Áreas Sociais amplas.
+        3. Cozinha / Área Gourmet.
+        4. Suíte Principal / Quartos.
+        5. Banheiros / Áreas de Serviço.
+        6. Detalhes menores.
+        
+        Retorne um JSON com o array 'sortedIndices' contendo os números das imagens na ordem sugerida.
+      `
+    });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            sortedIndices: {
+              type: Type.ARRAY,
+              items: { type: Type.INTEGER }
+            }
+          },
+          required: ["sortedIndices"]
+        }
+      }
+    });
+
+    const result = JSON.parse(response.text || '{"sortedIndices": []}');
+    return result.sortedIndices || [];
+  } catch (error) {
+    console.error("Rank Images Error:", error);
+    return base64Images.map((_, i) => i);
+  }
+};
