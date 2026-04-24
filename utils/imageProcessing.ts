@@ -12,13 +12,22 @@ export const readFileAsDataURL = (file: File): Promise<string> => {
   });
 };
 
-export const loadImage = (src: string): Promise<HTMLImageElement> => {
+export const loadImage = (src: string | File): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
+    img.onload = () => {
+      resolve(img);
+      if (typeof src !== 'string' || src.startsWith('blob:')) {
+         URL.revokeObjectURL(img.src);
+      }
+    };
     img.onerror = reject;
-    img.src = src;
+    if (typeof src === 'string') {
+        img.src = src;
+    } else {
+        img.src = URL.createObjectURL(src);
+    }
   });
 };
 
@@ -39,8 +48,7 @@ export const getImageDimensions = (src: string): Promise<ImageDimensions> => {
 
 // NEW: Optimized resizing for AI Analysis to prevent 500 Payload Errors
 export const resizeImageForAI = async (file: File, maxDimension: number = 800): Promise<string> => {
-  const imageUrl = await readFileAsDataURL(file);
-  const img = await loadImage(imageUrl);
+  const img = await loadImage(file);
   
   const canvas = document.createElement('canvas');
   let width = img.width;
@@ -76,8 +84,7 @@ export const applyWatermark = async (
   logoFile: File | null,
   settings: WatermarkSettings
 ): Promise<string> => {
-  const imageUrl = await readFileAsDataURL(imageFile);
-  const baseImage = await loadImage(imageUrl);
+  const baseImage = await loadImage(imageFile);
   
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -111,8 +118,7 @@ export const applyWatermark = async (
   ctx.drawImage(baseImage, 0, 0, newWidth, newHeight);
 
   if (logoFile) {
-    const logoUrl = await readFileAsDataURL(logoFile);
-    const logoImage = await loadImage(logoUrl);
+    const logoImage = await loadImage(logoFile);
 
     // Calculate logo size relative to canvas
     const logoWidth = newWidth * settings.scale;
