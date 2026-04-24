@@ -28,9 +28,9 @@ const initPDFWorker = async () => {
 
 const isContentRow = (data: Uint8ClampedArray, width: number, y: number, threshold: number = 240): boolean => {
     let contentPixels = 0;
-    for (let x = 0; x < width; x += 5) { 
+    const step = 8;
+    for (let x = 0; x < width; x += step) { 
         const idx = (y * width + x) * 4;
-        // Proteção contra acesso fora do array
         if (idx + 2 >= data.length) continue;
         const r = data[idx];
         const g = data[idx + 1];
@@ -39,14 +39,15 @@ const isContentRow = (data: Uint8ClampedArray, width: number, y: number, thresho
             contentPixels++;
         }
     }
-    return contentPixels > (width / 5) * 0.05; 
+    return contentPixels > (width / step) * 0.05; 
 };
 
 const isContentCol = (data: Uint8ClampedArray, width: number, height: number, x: number, yStart: number, yEnd: number, threshold: number = 240): boolean => {
     let contentPixels = 0;
     const scanHeight = yEnd - yStart;
+    const step = 8;
     
-    for (let y = yStart; y < yEnd; y += 5) {
+    for (let y = yStart; y < yEnd; y += step) {
         const idx = (y * width + x) * 4;
         if (idx + 2 >= data.length) continue;
         const r = data[idx];
@@ -56,7 +57,7 @@ const isContentCol = (data: Uint8ClampedArray, width: number, height: number, x:
             contentPixels++;
         }
     }
-    return contentPixels > (scanHeight / 5) * 0.05;
+    return contentPixels > (scanHeight / step) * 0.05;
 };
 
 // Algoritmo XY-Cut Recursivo para separar Grid de Fotos
@@ -158,7 +159,7 @@ const segmentCanvas = async (canvas: HTMLCanvasElement, pageNum: number): Promis
 // 2. Render Page to Canvas
 const renderPageAndSegment = async (page: any, pageNum: number): Promise<File[]> => {
     try {
-        const viewport = page.getViewport({ scale: 2.0 }); 
+        const viewport = page.getViewport({ scale: 1.0 }); 
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -228,7 +229,7 @@ export const extractDataFromPDF = async (pdfFile: File): Promise<ExtractedPDFDat
 
   // --- TRAVERSER ROBUSTO E RECURSIVO ---
   // Resolve o problema de "Cannot read properties of undefined (reading 'length')"
-  const traverseOperatorList = async (operatorList: any, pageObjs: any, pageNum: number, depth: number = 0) => {
+  const traverseOperatorList = async (operatorList: any, pageObjs: any, pageNum: number, depth: number = 0, extractedForPage: File[]) => {
       // Limite de profundidade para evitar travamento em PDFs circulares
       if (depth > 5) return;
       
@@ -257,7 +258,7 @@ export const extractDataFromPDF = async (pdfFile: File): Promise<ExtractedPDFDat
                           if (imgObj) {
                               const file = await convertRawImageToFile(imgObj, pageNum, imgName);
                               if (file) {
-                                  extractedImages.push(file);
+                                  extractedForPage.push(file);
                                   processedImageIds.add(uniqueKey);
                               }
                           }
@@ -270,7 +271,7 @@ export const extractDataFromPDF = async (pdfFile: File): Promise<ExtractedPDFDat
                        const imgObj = args[0];
                        const uniqueId = `inline_${Math.random().toString(36).substring(2,7)}`;
                        const file = await convertRawImageToFile(imgObj, pageNum, uniqueId);
-                       if(file) extractedImages.push(file);
+                       if(file) extractedForPage.push(file);
                   } catch(e) {}
               }
               // 3. Recursão para Grupos/Formulários (XObject)
@@ -285,12 +286,12 @@ export const extractDataFromPDF = async (pdfFile: File): Promise<ExtractedPDFDat
                       if (xObj) {
                           // Se tiver lista de operadores interna, mergulha nela
                           if (xObj.operatorList) {
-                              await traverseOperatorList(xObj.operatorList, xObj.objs || pageObjs, pageNum, depth + 1);
+                              await traverseOperatorList(xObj.operatorList, xObj.objs || pageObjs, pageNum, depth + 1, extractedForPage);
                           } 
                           // Se for um XObject de imagem mascarado
                           else if (xObj.data) {
                               const file = await convertRawImageToFile(xObj, pageNum, xObjName);
-                              if (file) extractedImages.push(file);
+                              if (file) extractedForPage.push(file);
                           }
                       }
                   } catch(e) {}
@@ -303,34 +304,47 @@ export const extractDataFromPDF = async (pdfFile: File): Promise<ExtractedPDFDat
       }
   };
 
+  const pagePromises = [];
+  
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const initialImgCount = extractedImages.length;
+      pagePromises.push((async () => {
+          const page = await pdf.getPage(pageNum);
+          let pageTextRaw = '';
+          const extractedForPage: File[] = [];
 
-    try {
-        const textContent = await page.getTextContent();
-        // @ts-ignore
-        const pageText = textContent.items.map((item: any) => item.str).join(' ');
-        if (pageText.trim()) fullText += `\n--- Pág ${pageNum} ---\n${pageText}\n`;
-    } catch (e) {}
+          try {
+              const textContent = await page.getTextContent();
+              // @ts-ignore
+              pageTextRaw = textContent.items.map((item: any) => item.str).join(' ');
+              if (pageTextRaw.trim()) {
+                  fullText += `\n--- Pág ${pageNum} ---\n${pageTextRaw}\n`;
+              }
+          } catch (e) {}
 
-    // Tentativa 1: Extração Direta (Segura)
-    try {
-        const ops = await page.getOperatorList();
-        const objs = page.objs || page.commonObjs;
-        await traverseOperatorList(ops, objs, pageNum);
-    } catch (e) {
-        console.warn(`Erro não crítico ao ler operadores da pág ${pageNum}. Usando fallback.`);
-    }
+          // Tentativa 1: Extração Direta (Segura)
+          try {
+              const ops = await page.getOperatorList();
+              const objs = page.objs || page.commonObjs;
+              await traverseOperatorList(ops, objs, pageNum, 0, extractedForPage);
+          } catch (e) {
+              console.warn(`Erro não crítico ao ler operadores da pág ${pageNum}.`);
+          }
 
-    // LÓGICA HÍBRIDA: Se falhou ou achou pouco, usa Segmentação Visual
-    if (extractedImages.length === initialImgCount || (extractedImages.length - initialImgCount) === 1) {
-        if ((extractedImages.length - initialImgCount) === 1) extractedImages.pop(); 
-        console.log(`Página ${pageNum}: Iniciando segmentação visual (Smart Crop)...`);
-        const segmentedFiles = await renderPageAndSegment(page, pageNum);
-        if (segmentedFiles.length > 0) extractedImages.push(...segmentedFiles);
-    }
+          // LÓGICA HÍBRIDA MAIS INTELIGENTE: Se achou 0 imagens nativas e a página tem pouco texto,
+          // usa Segmentação Visual. Pulamos páginas pesadas de texto para não sobrecarregar a CPU.
+          if (extractedForPage.length === 0 && pageTextRaw.trim().length < 300) {
+              console.log(`Página ${pageNum}: Pouco texto e 0 imagens. Analisando via Smart Crop...`);
+              const segmentedFiles = await renderPageAndSegment(page, pageNum);
+              if (segmentedFiles.length > 0) extractedForPage.push(...segmentedFiles);
+          }
+          
+          return extractedForPage;
+      })());
   }
+  
+  // Wait for all pages to be parsed concurrently (drastically speeds up processing)
+  const results = await Promise.all(pagePromises);
+  results.forEach(files => extractedImages.push(...files));
 
   return { text: fullText, images: extractedImages };
 };

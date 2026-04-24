@@ -11,6 +11,7 @@ interface PrintLayoutProps {
 const A4Page: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
   <div 
       className={`
+          pdf-page
           relative bg-white overflow-hidden mx-auto my-8 shadow-2xl 
           w-[210mm] h-[297mm] min-w-[210mm] min-h-[297mm]
           print:w-[210mm] print:h-[297mm] print:shadow-none print:m-0 print:my-0 print:break-after-page
@@ -43,10 +44,15 @@ const Footer = ({ pageNum, logoUrl }: { pageNum?: number; logoUrl: string | null
                <span>www.anjosimoveis.net</span>
           </div>
       </div>
-      <div className="text-right flex flex-col justify-center h-full w-1/4">
-          <p className="text-[9px] font-bold uppercase mb-1">PARA MAIORES INFORMAÇÕES:</p>
-          <p className="font-black text-lg leading-tight tracking-tight">(82) 9 9901-8701</p>
-          <p className="font-black text-lg leading-tight tracking-tight">(82) 9 8879-3479</p>
+      <div className="text-right flex flex-col justify-end pb-[6mm] h-full w-[35%]">
+          <p className="text-[9px] font-bold uppercase mb-1.5 opacity-80">MAIS INFORMAÇÕES E VENDAS:</p>
+          <div className="flex items-center justify-end gap-1.5 mb-1">
+              <span className="font-black text-[13pt] leading-none tracking-tight">(82) 9 9901-8701</span>
+          </div>
+          <div className="flex items-center justify-end gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+              <span className="font-black text-[13pt] leading-none tracking-tight whitespace-nowrap">(82) 9 8879-3479</span>
+          </div>
       </div>
       {pageNum && (
           <div className="absolute bottom-1 right-[50%] translate-x-[50%] text-[8px] font-bold text-slate-700 opacity-60">
@@ -78,9 +84,9 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
   let currentSpaceUsed = 0;
   
   // Use a more aggressive estimate for available space to maximize first page
-  // 1 unit = roughly 1 line of text
-  const PAGE_1_MAX_UNITS = 35; // Increased from 20
-  const PAGE_N_MAX_UNITS = 45; // Increased from 42
+  // With 2 columns, we have roughly double the units. 1 unit = roughly 1 line
+  const PAGE_1_MAX_UNITS = 40; // Reduced from 60 to prevent overflow
+  const PAGE_N_MAX_UNITS = 65; // Reduced from 85
 
   ai.sections.forEach((section) => {
       let sectionTitleAdded = false;
@@ -89,7 +95,7 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
       const addSectionToPage = () => {
           if (currentSectionContent.length > 0) {
               currentPageSections.push({
-                  title: sectionTitleAdded ? `${section.title} (Cont.)` : section.title,
+                  title: section.title, // Removed (Continuação) or (Cont.) logic to keep it looking clean
                   content: currentSectionContent,
                   isList: section.isList || false
               });
@@ -98,7 +104,7 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
           }
       };
 
-      const titleUnits = 2; // Title takes about 2 lines of space
+      const titleUnits = 2; // Title takes about 2 lines of space per column
       
       const maxAllowed = textPages.length === 0 ? PAGE_1_MAX_UNITS : PAGE_N_MAX_UNITS;
       
@@ -111,9 +117,9 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
       currentSpaceUsed += titleUnits;
 
       section.content.forEach((item) => {
-          // Estimate lines this item will take. 
-          // A typical line might hold 85-90 characters in this layout.
-          const lines = Math.ceil(item.length / 85); 
+          // Estimate lines this item will take.
+          // In a 2-column layout each line is about 45-50 characters wide.
+          const lines = Math.ceil(item.length / 50); 
           const itemUnits = section.isList ? lines : lines + 0.5; // Less spacing for paragraphs
           
           const currentMaxAllowed = textPages.length === 0 ? PAGE_1_MAX_UNITS : PAGE_N_MAX_UNITS;
@@ -175,30 +181,30 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
 
           {pIdx === 0 && (
             <div className="mt-4 mb-6 border-b-2 border-[#fbbf24] pb-6">
-                 <div className="flex justify-between items-start mb-4 gap-6">
-                     <div className="w-[65%]">
-                        <h1 className="font-serif text-[26pt] font-black text-[#0f172a] uppercase leading-[1] mb-2">{ai.marketingTitle}</h1>
-                        <h2 className="text-[#d97706] text-xl font-bold leading-tight uppercase tracking-wide">{ai.headline}</h2>
+                 <div className="flex justify-between items-start mb-6 gap-6">
+                     <div className="w-[55%]">
+                        <h1 className="font-serif text-[22pt] font-black text-[#0f172a] uppercase leading-[1.2] mb-3 break-words">{ai.marketingTitle}</h1>
+                        <h2 className="text-[#d97706] text-base font-bold leading-snug uppercase tracking-wide break-words">{ai.headline}</h2>
                      </div>
-                     <div className="w-[35%] text-right flex flex-col items-end">
+                     <div className="w-[45%] text-right pt-1">
                         {(() => {
                             const match = formattedPrice.match(/^(a\s*partir\s*de)\s*:?\s*(.*)$/i);
                             if (match) {
                                 return (
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-[12px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">A partir de:</span>
-                                        <span className="font-serif font-bold text-2xl text-[#0f172a] leading-none whitespace-nowrap">{match[2]}</span>
+                                    <div className="mb-4">
+                                        <div className="text-[12px] font-bold text-slate-500 uppercase tracking-widest leading-normal mb-1">A partir de:</div>
+                                        <div className="font-serif font-black text-2xl text-[#0f172a] leading-normal break-words">{match[2]}</div>
                                     </div>
                                 );
                             }
                             return (
-                                <div className="font-serif font-bold text-2xl text-[#0f172a] text-right leading-tight">
+                                <div className="mb-4 font-serif font-black text-2xl text-[#0f172a] leading-normal break-words">
                                     {formattedPrice}
                                 </div>
                             );
                         })()}
                         <div 
-                            className="text-slate-900 text-[11px] font-bold uppercase tracking-widest mt-2 bg-[#fbbf24] !bg-[#fbbf24] inline-block px-3 py-1 rounded"
+                            className="text-slate-900 text-[11px] font-bold uppercase tracking-widest bg-[#fbbf24] !bg-[#fbbf24] inline-block px-3 py-2 rounded text-right break-words max-w-full leading-normal"
                             style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
                         >
                             📍 {data.location}
@@ -233,33 +239,69 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
             </div>
           )}
 
-          <div className={`flex flex-col gap-6 ${pIdx > 0 ? 'mt-4' : ''}`}>
-              {pageSections.map((section, idx) => (
-                  <div key={idx}>
-                      <h3 className="font-serif text-lg font-bold text-[#0f172a] mb-2 flex items-center gap-2 uppercase border-b border-slate-200 pb-1">
-                          <span 
-                              className="w-3 h-3 bg-[#fbbf24] !bg-[#fbbf24] inline-block"
-                              style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
-                          ></span>
-                          {section.title}
-                      </h3>
-                      {section.isList ? (
-                          <ul className="space-y-1 mt-2">
-                              {section.content.map((item, i) => (
-                                  <li key={i} className="flex items-start gap-2 text-sm text-slate-800 text-justify leading-relaxed font-medium">
-                                      <span className="text-[#d97706] font-bold">✓</span><span>{item}</span>
-                                  </li>
-                              ))}
-                          </ul>
-                      ) : (
-                          <div className="space-y-3 mt-2">
-                               {section.content.map((item, i) => (
-                                  <p key={i} className="text-sm text-slate-700 text-justify leading-relaxed indent-4">{item}</p>
-                               ))}
+          <div className={`flex flex-row gap-8 items-start w-full ${pIdx > 0 ? 'mt-4' : ''}`}>
+              {/* Calculate columns locally to ensure html2canvas compatibility */}
+              {(() => {
+                  const col1: typeof pageSections = [];
+                  const col2: typeof pageSections = [];
+                  let col1Units = 0;
+                  let col2Units = 0;
+
+                  pageSections.forEach(section => {
+                      const titleUnits = 2;
+                      const itemsUnits = section.content.reduce((acc, item) => {
+                          const lines = Math.ceil(item.length / 50);
+                          return acc + (section.isList ? lines : lines + 0.5);
+                      }, 0);
+                      const totalUnits = titleUnits + itemsUnits + 1;
+
+                      if (col1Units <= col2Units) {
+                          col1.push(section);
+                          col1Units += totalUnits;
+                      } else {
+                          col2.push(section);
+                          col2Units += totalUnits;
+                      }
+                  });
+
+                  const renderSection = (section: typeof pageSections[0], idx: number) => (
+                      <div key={idx} className="mb-6">
+                          <h3 className="font-serif text-lg font-bold text-[#0f172a] mb-2 flex items-center gap-2 uppercase border-b border-slate-200 pb-1">
+                              <span 
+                                  className="w-3 h-3 bg-[#fbbf24] !bg-[#fbbf24] inline-block"
+                                  style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
+                              ></span>
+                              {section.title}
+                          </h3>
+                          {section.isList ? (
+                              <ul className="space-y-1 mt-2">
+                                  {section.content.map((item, i) => (
+                                      <li key={i} className="flex items-start gap-2 text-sm text-slate-800 text-justify leading-relaxed font-medium">
+                                          <span className="text-[#d97706] font-bold">✓</span><span className="flex-1">{item}</span>
+                                      </li>
+                                  ))}
+                              </ul>
+                          ) : (
+                              <div className="space-y-3 mt-2">
+                                   {section.content.map((item, i) => (
+                                      <p key={i} className="text-sm text-slate-700 text-justify leading-relaxed indent-4">{item}</p>
+                                   ))}
+                              </div>
+                          )}
+                      </div>
+                  );
+
+                  return (
+                      <>
+                          <div className="w-1/2 flex flex-col">
+                              {col1.map((section, idx) => renderSection(section, idx))}
                           </div>
-                      )}
-                  </div>
-              ))}
+                          <div className="w-1/2 flex flex-col">
+                              {col2.map((section, idx) => renderSection(section, idx))}
+                          </div>
+                      </>
+                  );
+              })()}
           </div>
           <Footer pageNum={pIdx + 1} logoUrl={logoUrl} />
         </A4Page>

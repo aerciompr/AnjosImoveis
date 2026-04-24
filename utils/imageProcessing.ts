@@ -177,14 +177,15 @@ export const extractFilesFromZip = async (zipFile: File): Promise<File[]> => {
             const isVideo = /\.(mp4|mov|webm|m4v|avi|mkv|wmv|flv)$/.test(name);
             const isPdf = /\.pdf$/.test(name);
             const isText = /\.(txt|rtf|doc|docx)$/.test(name);
+            const isZip = /\.zip$/.test(name);
 
-            if (isImage || isVideo || isPdf || isText) {
+            if (isImage || isVideo || isPdf || isText || isZip) {
                 let blob = await entry.async('blob');
                 let type = 'application/octet-stream';
                 let fileName = entry.name.split('/').pop() || entry.name;
                 
                 if (isImage) {
-                    // Convert HEIC to JPEG if needed
+                    // ... (existing image logic)
                     if (name.endsWith('heic') || name.endsWith('heif')) {
                         try {
                             const convertedBlob = await heic2any({
@@ -211,13 +212,20 @@ export const extractFilesFromZip = async (zipFile: File): Promise<File[]> => {
                     if (name.endsWith('txt')) type = 'text/plain';
                     else if (name.endsWith('rtf')) type = 'application/rtf';
                     else type = 'application/msword';
+                } else if (isZip) {
+                    type = 'application/zip';
                 }
                 
                 validFiles.push(new File([blob], fileName, { type }));
             }
         });
 
-        await Promise.all(promises);
+        // Process in chunks of 5 to avoid overwhelming memory/CPU (especially for HEIC)
+        const chunkSize = 5;
+        for (let i = 0; i < promises.length; i += chunkSize) {
+            await Promise.all(promises.slice(i, i + chunkSize));
+        }
+
         return validFiles;
     } catch (error) {
         console.error("ZIP Error", error);
@@ -271,9 +279,18 @@ export const extractUniqueFramesFromVideo = async (
         video.playsInline = true;
         
         // Wait for metadata to know duration
-        await new Promise((r) => { video.onloadedmetadata = r; });
+        await new Promise((r) => { 
+            video.onloadedmetadata = r; 
+            // Fallback if metadata fails to load
+            setTimeout(r, 5000);
+        });
         
         const duration = video.duration;
+        if (!duration || isNaN(duration)) {
+            resolve([]);
+            return;
+        }
+
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         

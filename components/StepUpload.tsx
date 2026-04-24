@@ -36,7 +36,8 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
 
       try {
           // 1. Expand ZIPs (Recursive)
-          const expandZips = async (files: File[]): Promise<File[]> => {
+          const expandZips = async (files: File[], depth = 0): Promise<File[]> => {
+              if (depth > 5) return files; // Safety limit
               const result: File[] = [];
               for (const file of files) {
                   const isZip = file.name.toLowerCase().endsWith('.zip') || 
@@ -48,7 +49,7 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
                       try {
                           const extracted = await extractFilesFromZip(file);
                           // Recurse to find zips inside zips
-                          const nested = await expandZips(extracted);
+                          const nested = await expandZips(extracted, depth + 1);
                           result.push(...nested);
                       } catch (err) {
                           console.error("ZIP Error", err);
@@ -141,65 +142,24 @@ const StepUpload: React.FC<StepUploadProps> = ({ photos, setPhotos, logo, setLog
               }
           }
 
-              // 7. SMART FILTER: Filter out junk images (logos, textures, etc.)
+          // 7. SMART FILTER: Bypass AI Filtering to save tokens
           const allExtractedPhotos = [...newPhotos, ...extractedFrames, ...pdfImagesToProcess];
           if (allExtractedPhotos.length > 0) {
-              setProcessingStatus('Filtrando e organizando fotos (IA)...');
+              setProcessingStatus('Organizando fotos...');
               
-              // Process in batches of 15 for safety and performance
-              const batchSize = 15;
-              let filteredPhotos: File[] = [];
-              
-              for (let i = 0; i < allExtractedPhotos.length; i += batchSize) {
-                  const batch = allExtractedPhotos.slice(i, i + batchSize);
-                  const base64Batch = await Promise.all(batch.map(f => resizeImageForAI(f, 512))); // Small size for filtering
-                  const validIndices = await filterRealEstateImages(base64Batch);
-                  
-                  validIndices.forEach(idx => {
-                      if (idx < batch.length) {
-                          filteredPhotos.push(batch[idx]);
-                      }
-                  });
-              }
+              // bypass filtering and ranking to save AI tokens entirely
+              let filteredPhotos: File[] = allExtractedPhotos;
 
-              // 8. RANKING: Sort filtered photos by importance
-              if (filteredPhotos.length > 0) {
-                  try {
-                      // Rank only the first 20 images to avoid too many parts in a single request
-                      const rankBatch = filteredPhotos.slice(0, 20);
-                      const base64RankBatch = await Promise.all(rankBatch.map(f => resizeImageForAI(f, 512)));
-                      const sortedIndices = await rankRealEstateImages(base64RankBatch);
-                      
-                      const sortedPhotos: File[] = [];
-                      const usedIndices = new Set<number>();
-                      
-                      sortedIndices.forEach(idx => {
-                          if (idx < rankBatch.length && !usedIndices.has(idx)) {
-                              sortedPhotos.push(rankBatch[idx]);
-                              usedIndices.add(idx);
-                          }
-                      });
-                      
-                      // Add remaining images that weren't in the top 20 or weren't ranked
-                      filteredPhotos.forEach((file, idx) => {
-                          if (idx >= 20 || !usedIndices.has(idx)) {
-                              sortedPhotos.push(file);
-                          }
-                      });
-                      
-                      filteredPhotos = sortedPhotos;
-                  } catch (e) {
-                      console.error("Ranking error", e);
-                  }
-              }
+              /* 
+               * AI Token Saver Mode:
+               * Disabling AI filtering and ranking because passing dozens of 
+               * image blobs to Gemini consumes entirely too many tokens and 
+               * exhausts free tier limits extremely quickly.
+               */
               
-              // Update photos with ONLY the filtered and sorted ones
+              // Update photos with all photos
               setPhotos((prev) => [...prev, ...filteredPhotos]);
               
-              const removedCount = allExtractedPhotos.length - filteredPhotos.length;
-              if (removedCount > 0) {
-                  console.log(`IA removeu ${removedCount} imagens irrelevantes (logos, texturas, etc).`);
-              }
           }
 
           if (newPhotos.length === 0 && videosToProcess.length === 0 && pdfsToProcess.length === 0 && textFilesToProcess.length === 0 && filesToProcess.length > 0) {

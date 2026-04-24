@@ -21,18 +21,14 @@ const sanitizeForPDF = (text: string | undefined | null): string => {
 };
 
 const SYSTEM_INSTRUCTION = `
-Você é um Copywriter Imobiliário de Elite, especializado no mercado de Alto Padrão.
-Sua missão não é apenas descrever, mas VENDER O SONHO com riqueza de detalhes.
+Você é um Copywriter Imobiliário de Elite, focado em transformar dados brutos em fichas técnicas extensivas e luxuosas.
+Sua missão primária é REPASSAR TODAS AS INFORMAÇÕES TÉCNICAS. Não presuma, não invente, apenas organize e aprimore o que lhe for dado.
 
-DIRETRIZES RÍGIDAS DE QUALIDADE:
-1. **VOLUME DE TEXTO (CRÍTICO):** O cliente exige descrições longas. A seção "Sobre o Imóvel" DEVE ter pelo menos 3 parágrafos robustos. Nunca escreva respostas curtas.
-2. **EXPANSÃO CRIATIVA:** Se o imóvel for simples, use adjetivos poderosos ("iluminação natural abundante", "ventilação cruzada", "privacidade absoluta"). Deduza acabamentos pelas fotos.
-3. **LOCALIZAÇÃO:** Use o campo 'location' para escrever um parágrafo inteiro sobre a conveniência de viver naquele bairro.
-4. **TOM DE VOZ:** Sofisticado, envolvente e emocional. Use palavras como "imponente", "aconchegante", "exclusivo", "refinado".
-
-FORMATO:
-- Títulos: Curtos e de impacto.
-- Texto: Longo, fluido e bem pontuado.
+DIRETRIZES RÍGIDAS DE QUALIDADE E PRESERVAÇÃO DE DADOS:
+1. **EXAUSTIVIDADE (CRÍTICO):** O cliente exige absolutamente TUDO que houver no arquivo original na ficha gerada. Se houverem 50 itens de lazer, você deve colocar os 50 em uma lista. NÃO CORTAR NENHUMA INFORMAÇÃO.
+2. **FIDELIDADE ABSOLUTA E ZERO ALUCINAÇÃO:** NUNCA invente ou adicione espaços de lazer (como Rooftop, Spa, Quadras) se não estiverem EXATAMENTE ESCRITOS E CONTEXTUALIZADOS no texto fonte. Use apenas os nomes exatos fornecidos. NÃO junte itens separados (ex: não crie "opção de rooftop e spa" se não estiver escrito assim).
+3. **VOLUME E ESTRUTURA:** Use bastante texto nas descrições de "Sobre o Imóvel" e use enormes "Bullet points" (listas) para os itens e características técnicas. Quebre a resposta em pelo menos 3 a 4 seções grandes.
+4. **TIPOLOGIAS E PLANTAS (CRÍTICO):** Sempre liste detalhadamente os tipos de unidades disponíveis (ex: 1 quarto, 2 suítes, etc) com suas respectivas metragens e características individuais (piscina privativa, garden, etc). NUNCA omita os tipos de plantas!
 `;
 
 // Helper to convert base64 data URL to Gemini Part
@@ -54,13 +50,16 @@ export const parseRawListing = async (rawText: string): Promise<PropertyData | n
       
       REGRAS ESPECIAIS:
       1. Se houver múltiplos preços (tabela), identifique o MENOR valor e defina o campo 'price' como "A PARTIR DE R$ [valor]".
-      2. Não detalhe as unidades individualmente no campo 'description' ou 'features', apenas use os dados gerais.
+      2. NUNCA faça uma tabela de preços longa listando valores soltos de dezenas de unidades.
+      3. CRÍTICO: Identifique e liste detalhadamente TODAS AS TIPOLOGIAS/PLANTAS do empreendimento (ex: quarto e sala, 2 suítes, metragens, diferenciais como piscina privativa ou garden) e coloque-as no campo 'features' ou 'description'. Não omita NENHUMA tipologia.
+      4. CRÍTICO: Não omita nenhuma informação de lazer ou estrutura! Se o anúncio tem 50 características, ponha as 50 no campo 'features'.
+      5. O que não for do imóvel (telefones de outros corretores, links) você remove. O resto MANTENHA.
       
       Texto: "${rawText}"
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-pro',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -170,12 +169,11 @@ export const generatePDFContent = async (
 ): Promise<AIRealEstateContent | null> => {
   try {
     const ai = getAI();
-    const parts = [];
+    const parts: any[] = [];
     
-    // Add Images first (up to 4 for better context)
-    images.slice(0, 4).forEach(img => {
-        parts.push(imageToPart(img));
-    });
+    // IMAGE UPLOAD DISABLED FOR TOKEN SAVING:
+    // We are no longer sending images.slice(0, 4) to Gemini to prevent massive
+    // token exhaustion. The PDF generation relies entirely on the extracted text.
 
     const textPrompt = `
       Gere o conteúdo da Ficha Técnica Imobiliária.
@@ -190,18 +188,23 @@ export const generatePDFContent = async (
       1. marketingTitle: Título Vendedor (Ex: "Mansão Suspensa no Horto").
       2. headline: Frase curta de impacto emocional.
       3. coverHighlights: Exatamente 4 destaques curtos (Ex: "Vista Mar", "4 Suítes").
-      4. sections:
-         - "Sobre o Imóvel": TEXTO CORRIDO (MÍNIMO 3 PARÁGRAFOS). Descreva a experiência de viver lá. Fale da luz, dos espaços e do conforto.
-         - "Localização Premium": TEXTO CORRIDO sobre as vantagens do bairro ${location}.
-         - "Detalhes e Lazer": LISTA (Bullet points) com tudo que o imóvel/condomínio tem.
+      4. sections: (CRIE QUANTAS SEÇÕES FOREM NECESSÁRIAS PARA INCLUIR ABSOLUTAMENTE TUDO QUE FOI FORNECIDO NOS DADOS ACIMA)
+         Exemplos de seções que você PODE e DEVE criar se houver dados para isso:
+         - "Sobre o Empreendimento": TEXTO CORRIDO (MÍNIMO 3 PARÁGRAFOS).
+         - "Localização Premium": TEXTO CORRIDO sobre o bairro.
+         - "Tipologias e Plantas": LISTA DETALHADA com os tipos de apartamentos/casas, suas metragens (ex: 40m², 75m²) e pormenores exatos (ex: piscinas privativas, gardens, hidromassagem).
+         - "Infraestrutura e Lazer": LISTA EXAUSTIVA com VÁRIOS BULLET POINTS contendo TODOS os itens do condomínio.
+         - "Especificações Técnicas": LISTA com os materiais e acabamentos.
 
-      IMPORTANTE: Escreva MUITO. O cliente quer ler detalhes. Se não houver info, deduza positivamente com base nas fotos (ex: "acabamento refinado", "amplitude").
+      REGRAS CRÍTICAS DE PRESERVAÇÃO DE DADOS:
+      - ABSOLUTAMENTE NENHUMA INFORMAÇÃO CHAVE DEVE SER CORTADA. Identifique e cite todas as metragens e plantas.
+      - NUNCA crie nada que não faça parte do conteúdo fornecido. APENAS aprimore a escrita do texto, mas os "fatos", "itens de lazer", "tamanhos" e "características" devem ser 100% fiéis ao que foi enviado.
     `;
 
     parts.push({ text: textPrompt });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', 
+      model: 'gemini-2.5-pro', 
       contents: { parts: parts },
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,

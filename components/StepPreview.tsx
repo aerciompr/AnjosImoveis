@@ -1,8 +1,10 @@
 
 import React, { useState } from 'react';
 import { PropertyData, PrintableImage } from '../types';
-import { ArrowLeft, CheckCircle2, X, Eye, Printer } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, X, Eye, Printer, Download, Loader2 } from 'lucide-react';
 import PrintLayout from './PrintLayout';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 interface StepPreviewProps {
   processedImages: PrintableImage[]; 
@@ -14,6 +16,7 @@ interface StepPreviewProps {
 const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, onBack }) => {
   const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   React.useEffect(() => {
     if (logo) setLogoUrl(URL.createObjectURL(logo));
@@ -21,6 +24,61 @@ const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, 
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownload = async () => {
+    setIsGenerating(true);
+    try {
+        const printContainer = document.querySelector('.print-only-container') as HTMLElement;
+        if (!printContainer) return;
+
+        // Temporarily make it visible to capture
+        printContainer.classList.remove('hidden');
+        printContainer.classList.add('block');
+        
+        // Wait a frame for rendering
+        await new Promise(r => setTimeout(r, 100));
+
+        const pages = printContainer.querySelectorAll('.pdf-page');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+
+        for (let i = 0; i < pages.length; i++) {
+            if (i > 0) pdf.addPage();
+            
+            const pageEl = pages[i] as HTMLElement;
+            // Capture high resolution
+            const canvas = await html2canvas(pageEl, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                allowTaint: true
+            });
+            
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        }
+
+        // Hide it back
+        printContainer.classList.add('hidden');
+        printContainer.classList.remove('block');
+
+        const safeTitle = data.title ? data.title.replace(/[^a-zA-Z0-9]/g, '_') : 'Ficha_Imovel';
+        pdf.save(`${safeTitle.substring(0, 30)}.pdf`);
+        
+    } catch (error) {
+        console.error("Error generating PDF", error);
+        alert("Ocorreu um erro ao gerar o PDF. Tente imprimir a tela.");
+        
+        const printContainer = document.querySelector('.print-only-container') as HTMLElement;
+        if (printContainer) {
+            printContainer.classList.add('hidden');
+            printContainer.classList.remove('block');
+        }
+    } finally {
+        setIsGenerating(false);
+    }
   };
 
   return (
@@ -57,18 +115,26 @@ const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, 
                       <div>
                           <h3 className="font-bold text-lg">Visualização Final</h3>
                           <p className="text-xs text-slate-400">
-                              Clique em <strong>Imprimir</strong> e escolha "Salvar como PDF".
+                              Faça o <strong>Download</strong> em alta resolução ou imprima diretamente.
                           </p>
                       </div>
                   </div>
 
                   <div className="flex gap-3">
                       <button
+                          onClick={handleDownload}
+                          disabled={isGenerating}
+                          className="px-6 py-2 rounded-lg font-bold shadow-lg transition flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-70"
+                      >
+                          {isGenerating ? <Loader2 size={20} className="animate-spin"/> : <Download size={20} />}
+                          BAIXAR PDF
+                      </button>
+                      <button
                           onClick={handlePrint}
                           className="px-6 py-2 rounded-lg font-bold shadow-lg transition flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
                       >
                           <Printer size={20}/>
-                          IMPRIMIR / SALVAR PDF
+                          IMPRIMIR
                       </button>
                   </div>
               </div>
@@ -100,16 +166,27 @@ const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, 
               <div className="p-8 space-y-6">
                   
                   <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg text-sm text-amber-900 mb-4 text-center">
-                      <strong>Dica:</strong> Para a melhor qualidade, usamos a impressão nativa do navegador.
+                      <strong>Dica:</strong> Você pode visualizar primeiro ou fazer o download direto do seu PDF.
                   </div>
 
-                  <button
-                      onClick={() => setShowPreviewModal(true)}
-                      className="w-full bg-slate-900 text-white text-xl font-bold py-5 rounded-xl shadow-lg hover:bg-slate-800 transition flex items-center justify-center gap-3 transform hover:scale-[1.01]"
-                  >
-                      <Eye size={24} className="text-amber-500"/>
-                      VISUALIZAR E IMPRIMIR
-                  </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <button
+                          onClick={() => setShowPreviewModal(true)}
+                          className="w-full bg-slate-900 text-white text-lg font-bold py-4 rounded-xl shadow-lg hover:bg-slate-800 transition flex items-center justify-center gap-3 transform hover:scale-[1.01]"
+                      >
+                          <Eye size={24} className="text-amber-500"/>
+                          VISUALIZAR
+                      </button>
+                      
+                      <button
+                          onClick={handleDownload}
+                          disabled={isGenerating}
+                          className="w-full bg-blue-600 text-white text-lg font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition flex items-center justify-center gap-3 transform hover:scale-[1.01] disabled:opacity-70 disabled:scale-100"
+                      >
+                          {isGenerating ? <Loader2 size={24} className="animate-spin text-white"/> : <Download size={24} className="text-white"/>}
+                          BAIXAR PDF DIRETO
+                      </button>
+                  </div>
 
                   <div className="text-center pt-4">
                       <button onClick={onBack} className="text-slate-500 hover:text-slate-800 font-medium flex items-center justify-center gap-2 mx-auto">
