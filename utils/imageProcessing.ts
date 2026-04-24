@@ -15,15 +15,22 @@ export const readFileAsDataURL = (file: File): Promise<string> => {
 export const loadImage = (src: string | File): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    
     img.onload = () => {
       resolve(img);
+      // It's safer to avoid immediate revoke if canvas draw needs it in some engines
+      // but usually it's fine. We'll leave it to GC or keep it simpler.
       if (typeof src !== 'string' || src.startsWith('blob:')) {
-         URL.revokeObjectURL(img.src);
+         // Optionally revoke after a delay to ensure drawImage completes
+         setTimeout(() => URL.revokeObjectURL(img.src), 100);
       }
     };
     img.onerror = reject;
+    
     if (typeof src === 'string') {
+        if (src.startsWith('http')) {
+            img.crossOrigin = "anonymous";
+        }
         img.src = src;
     } else {
         img.src = URL.createObjectURL(src);
@@ -80,9 +87,10 @@ export const resizeImageForAI = async (file: File, maxDimension: number = 800): 
 };
 
 export const applyWatermark = async (
-  imageFile: File,
+  imageFile: File | string,
   logoFile: File | null,
-  settings: WatermarkSettings
+  settings: WatermarkSettings,
+  preloadedLogo?: HTMLImageElement | null
 ): Promise<string> => {
   const baseImage = await loadImage(imageFile);
   
@@ -117,8 +125,8 @@ export const applyWatermark = async (
   // Draw original image exactly filling the canvas
   ctx.drawImage(baseImage, 0, 0, newWidth, newHeight);
 
-  if (logoFile) {
-    const logoImage = await loadImage(logoFile);
+  if (logoFile || preloadedLogo) {
+    const logoImage = preloadedLogo ? preloadedLogo : await loadImage(logoFile!);
 
     // Calculate logo size relative to canvas
     const logoWidth = newWidth * settings.scale;

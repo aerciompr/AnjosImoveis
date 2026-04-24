@@ -60,6 +60,11 @@ const StepWatermark: React.FC<StepWatermarkProps> = ({ photos, logo, endCard, se
     const processedList: PrintableImage[] = [];
     
     try {
+        let preloadedLogo: HTMLImageElement | null = null;
+        if (logo) {
+            preloadedLogo = await loadImage(logo);
+        }
+
         // 1. Process User Photos
         const total = photos.length + (endCard ? 1 : 0);
         let current = 0;
@@ -70,7 +75,7 @@ const StepWatermark: React.FC<StepWatermarkProps> = ({ photos, logo, endCard, se
             setProgress(Math.round((current / total) * 100));
 
             // Apply watermark
-            const markedBase64 = await applyWatermark(file, logo, wmSettings);
+            const markedBase64 = await applyWatermark(file, logo, wmSettings, preloadedLogo);
             
             // Check orientation
             const img = await loadImage(markedBase64);
@@ -111,7 +116,7 @@ const StepWatermark: React.FC<StepWatermarkProps> = ({ photos, logo, endCard, se
 
     } catch (e) {
         console.error("Batch processing error", e);
-        alert("Erro ao processar imagens. Tente recarregar a página.");
+        alert("Erro ao processar imagens. A marca d'água falhou... Verificando...");
         setIsProcessing(false);
     }
   };
