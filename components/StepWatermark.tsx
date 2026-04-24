@@ -34,7 +34,7 @@ const StepWatermark: React.FC<StepWatermarkProps> = ({ photos, logo, endCard, se
     const updatePreview = async () => {
         try {
             const res = await applyWatermark(photos[0], logo, wmSettings);
-            setPreviewUrl(res);
+            setPreviewUrl(res.base64);
         } catch (e) {
             console.error(e);
         }
@@ -74,19 +74,22 @@ const StepWatermark: React.FC<StepWatermarkProps> = ({ photos, logo, endCard, se
             current++;
             setProgress(Math.round((current / total) * 100));
 
-            // Apply watermark
-            const markedBase64 = await applyWatermark(file, logo, wmSettings, preloadedLogo);
-            
-            // Check orientation
-            const img = await loadImage(markedBase64);
-            const isPortrait = img.height > img.width;
+            try {
+                // Apply watermark
+                const result = await applyWatermark(file, logo, wmSettings, preloadedLogo);
+                
+                // Check orientation from result directly without reloading
+                const isPortrait = result.height > result.width;
 
-            const printableObj: PrintableImage = {
-                url: markedBase64,
-                isPortrait: isPortrait
-            };
+                const printableObj: PrintableImage = {
+                    url: result.base64,
+                    isPortrait: isPortrait
+                };
 
-            processedList.push(printableObj);
+                processedList.push(printableObj);
+            } catch (err) {
+                console.warn("Failed to process image, skipping:", err);
+            }
 
             // Tiny yield to keep UI responsive
             await new Promise(r => setTimeout(r, 10));
@@ -102,7 +105,7 @@ const StepWatermark: React.FC<StepWatermarkProps> = ({ photos, logo, endCard, se
             
             // Assume End Card is always landscape/special (safe default)
             const endCardObj: PrintableImage = {
-                url: endUrl,
+                url: endUrl.base64,
                 isPortrait: false 
             };
             

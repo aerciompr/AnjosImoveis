@@ -25,7 +25,11 @@ export const loadImage = (src: string | File): Promise<HTMLImageElement> => {
          setTimeout(() => URL.revokeObjectURL(img.src), 100);
       }
     };
-    img.onerror = reject;
+    img.onerror = (err) => {
+        const typeInfo = typeof src === 'string' ? `string (len: ${src.length})` : 'File';
+        console.error(`loadImage failed explicitly for type: ${typeInfo}`, err);
+        reject(err);
+    };
     
     if (typeof src === 'string') {
         if (src.startsWith('http')) {
@@ -33,7 +37,11 @@ export const loadImage = (src: string | File): Promise<HTMLImageElement> => {
         }
         img.src = src;
     } else {
-        img.src = URL.createObjectURL(src);
+        try {
+            img.src = URL.createObjectURL(src);
+        } catch (e) {
+            reject(e);
+        }
     }
   });
 };
@@ -91,7 +99,7 @@ export const applyWatermark = async (
   logoFile: File | null,
   settings: WatermarkSettings,
   preloadedLogo?: HTMLImageElement | null
-): Promise<string> => {
+): Promise<{ base64: string, width: number, height: number }> => {
   const baseImage = await loadImage(imageFile);
   
   const canvas = document.createElement('canvas');
@@ -165,7 +173,13 @@ export const applyWatermark = async (
     ctx.globalAlpha = 1.0;
   }
 
-  return canvas.toDataURL('image/jpeg', 0.8);
+  const base64 = canvas.toDataURL('image/jpeg', 0.85);
+
+  // Free memory
+  canvas.width = 0;
+  canvas.height = 0;
+
+  return { base64, width: newWidth, height: newHeight };
 };
 
 // --- ZIP UTILS ---

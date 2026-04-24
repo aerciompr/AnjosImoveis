@@ -8,13 +8,16 @@ interface PrintLayoutProps {
 }
 
 // A4 Page Component
-const A4Page: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
+const A4Page: React.FC<{ children: React.ReactNode; className?: string; landscape?: boolean }> = ({ children, className = "", landscape = false }) => (
   <div 
       className={`
           pdf-page
           relative bg-white overflow-hidden mx-auto my-8 shadow-2xl 
-          w-[210mm] h-[297mm] min-w-[210mm] min-h-[297mm]
-          print:w-[210mm] print:h-[297mm] print:shadow-none print:m-0 print:my-0 print:break-after-page
+          ${landscape 
+              ? 'w-[297mm] h-[210mm] min-w-[297mm] min-h-[210mm] print:w-[297mm] print:h-[210mm] is-landscape' 
+              : 'w-[210mm] h-[297mm] min-w-[210mm] min-h-[297mm] print:w-[210mm] print:h-[297mm] is-portrait'
+          }
+          print:shadow-none print:m-0 print:my-0 print:break-after-page
           ${className}
       `}
       style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
@@ -146,25 +149,10 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
   }
 
   // --- SMART PAGINATION LOGIC FOR IMAGES ---
+  // ALWAYS 1 image per page to maintain original presentation format
   const galleryPages: PrintableImage[][] = [];
-  let i = 0;
-
-  while (i < images.length) {
-    const current = images[i];
-    
-    if (current.isPortrait) {
-        galleryPages.push([current]);
-        i++;
-    } else {
-        const next = images[i + 1];
-        if (next && !next.isPortrait) {
-            galleryPages.push([current, next]);
-            i += 2;
-        } else {
-            galleryPages.push([current]);
-            i++;
-        }
-    }
+  for (let idx = 0; idx < images.length; idx++) {
+      galleryPages.push([images[idx]]);
   }
 
   return (
@@ -182,11 +170,11 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
           {pIdx === 0 && (
             <div className="mt-4 mb-6 border-b-2 border-[#fbbf24] pb-6">
                  <div className="flex justify-between items-start mb-6 gap-6">
-                     <div className="w-[55%]">
+                     <div className="flex-1 pr-4">
                         <h1 className="font-serif text-[22pt] font-black text-[#0f172a] uppercase leading-[1.2] mb-3 break-words">{ai.marketingTitle}</h1>
                         <h2 className="text-[#d97706] text-base font-bold leading-snug uppercase tracking-wide break-words">{ai.headline}</h2>
                      </div>
-                     <div className="w-[45%] text-right pt-1">
+                     <div className="flex-none w-2/5 text-right pt-1">
                         {(() => {
                             const match = formattedPrice.match(/^(a\s*partir\s*de)\s*:?\s*(.*)$/i);
                             if (match) {
@@ -308,30 +296,25 @@ const PrintLayout: React.FC<PrintLayoutProps> = ({ data, images = [], logoUrl })
       ))}
 
       {/* ================= GALLERY PAGES ================= */}
-      {galleryPages.map((pageImages, pIdx) => (
-         <A4Page key={pIdx} className="p-[15mm] pt-[15mm]">
-             <div className="flex flex-col gap-6 h-[240mm] items-center justify-center">
-                 {pageImages.map((img, i) => {
-                     let heightClass = "h-[110mm]"; 
-                     if (img.isPortrait) heightClass = "h-[220mm]"; 
-                     else if (pageImages.length === 1) heightClass = "h-[160mm]"; 
-
-                     return (
-                        <div key={i} className={`relative w-full ${heightClass} bg-white rounded-lg overflow-hidden border border-slate-200 shadow-sm flex items-center justify-center`}>
-                            <img 
-                                src={img.url} 
-                                className="w-full h-full object-contain" 
-                                alt={`Galeria ${pIdx}-${i}`} 
-                                loading="eager"
-                            />
-                        </div>
-                     );
-                 })}
+      {galleryPages.map((pageImages, pIdx) => {
+         const img = pageImages[0];
+         return (
+         <A4Page key={pIdx} landscape={!img.isPortrait} className="p-[15mm] pt-[15mm]">
+             <div className="flex flex-col h-[calc(100%-35mm)] items-center justify-center -mt-4">
+                <div className={`relative w-full h-[95%] bg-white rounded-lg overflow-hidden flex items-center justify-center`}>
+                    <img 
+                        src={img.url} 
+                        className="w-full h-full object-contain" 
+                        alt={`Galeria ${pIdx}`} 
+                        loading="eager"
+                    />
+                </div>
              </div>
 
              <Footer pageNum={textPages.length + pIdx + 1} logoUrl={logoUrl} />
          </A4Page>
-      ))}
+         );
+      })}
 
     </div>
   );

@@ -40,14 +40,24 @@ const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, 
         await new Promise(r => setTimeout(r, 100));
 
         const pages = printContainer.querySelectorAll('.pdf-page');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        // Handle first page orientation based on its class
+        const firstPageLandscape = pages[0]?.classList.contains('is-landscape') || false;
+        const pdf = new jsPDF({ 
+            orientation: firstPageLandscape ? 'l' : 'p', 
+            unit: 'mm', 
+            format: 'a4' 
+        });
 
         for (let i = 0; i < pages.length; i++) {
-            if (i > 0) pdf.addPage();
-            
             const pageEl = pages[i] as HTMLElement;
+            const isLandscape = pageEl.classList.contains('is-landscape');
+            
+            if (i > 0) {
+                // Add new page with correct orientation
+                pdf.addPage('a4', isLandscape ? 'l' : 'p');
+            }
+            
             // Capture high resolution
             const canvas = await html2canvas(pageEl, {
                 scale: 2,
@@ -57,6 +67,11 @@ const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, 
             });
             
             const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            
+            // Width and Height in mm for the current page orientation
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            
             pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
         }
 
