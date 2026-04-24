@@ -47,11 +47,11 @@ const Footer = ({ pageNum, logoUrl }: { pageNum?: number; logoUrl: string | null
       <div className="text-right flex flex-col justify-end pb-[6mm] h-full w-[35%]">
           <p className="text-[9px] font-bold uppercase mb-1.5 opacity-80">MAIS INFORMAÇÕES E VENDAS:</p>
           <div className="flex items-center justify-end gap-1.5 mb-1">
-              <span className="font-black text-[13pt] leading-none tracking-tight">(82) 9 9901-8701</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+              <span className="font-black text-[12pt] leading-none tracking-tight whitespace-nowrap">(82) 9 9901-8701</span>
           </div>
           <div className="flex items-center justify-end gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
-              <span className="font-black text-[13pt] leading-none tracking-tight whitespace-nowrap">(82) 9 8879-3479</span>
+              <span className="font-black text-[12pt] leading-none tracking-tight whitespace-nowrap">(82) 9 8879-3479</span>
           </div>
       </div>
       {pageNum && (

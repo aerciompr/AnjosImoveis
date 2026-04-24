@@ -5,7 +5,7 @@ import StepUpload from './components/StepUpload';
 import StepDetails from './components/StepDetails';
 import StepWatermark from './components/StepWatermark'; // New Component
 import StepPreview from './components/StepPreview';
-import { CheckCircle, Image as ImageIcon, FileText, Stamp, Printer } from 'lucide-react';
+import { CheckCircle, Image as ImageIcon, FileText, Stamp, Printer, Settings } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<Step>(Step.UPLOAD);
@@ -31,6 +31,11 @@ const App: React.FC = () => {
     features: '',
     description: ''
   });
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [aiProvider, setAiProvider] = useState(() => localStorage.getItem('ai_provider') || 'gemini');
+  const [openAiKey, setOpenAiKey] = useState(() => localStorage.getItem('openai_api_key') || '');
+  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
 
   // AUTOMATION: Fetch specific assets on load
   useEffect(() => {
@@ -65,6 +70,13 @@ const App: React.FC = () => {
       nextStep();
   };
 
+  const handleSaveSettings = () => {
+      localStorage.setItem('ai_provider', aiProvider);
+      localStorage.setItem('openai_api_key', openAiKey);
+      localStorage.setItem('gemini_api_key', geminiKey);
+      setShowSettings(false);
+  };
+
   // Stepper Config
   const steps = [
       { id: Step.UPLOAD, label: 'Fotos', icon: ImageIcon },
@@ -89,9 +101,81 @@ const App: React.FC = () => {
               <div className="text-xs text-amber-700 font-bold bg-amber-100 px-2 py-1 rounded">
                  CRECI 1089
               </div>
+              <button 
+                onClick={() => setShowSettings(true)}
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800 flex items-center justify-center transition"
+                title="Configurações de IA"
+              >
+                  <Settings size={18} />
+              </button>
           </div>
         </div>
       </header>
+
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex flex-col items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <Settings className="w-5 h-5" /> Configurações de IA
+                    </h2>
+                    <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-red-500 font-bold">FECHAR</button>
+                </div>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">Qual IA você deseja usar?</label>
+                        <select 
+                            value={aiProvider}
+                            onChange={(e) => setAiProvider(e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                        >
+                            <option value="gemini">Gemini (Google) - Padrão</option>
+                            <option value="openai">ChatGPT (OpenAI)</option>
+                        </select>
+                        <p className="text-xs text-slate-500 mt-1">Os modelos usados consomem tokens baseados no tamanho do texto/PDF.</p>
+                    </div>
+
+                    {aiProvider === 'openai' && (
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Chave de API OpenAI (Obrigatório)</label>
+                            <input 
+                                type="password" 
+                                value={openAiKey}
+                                onChange={(e) => setOpenAiKey(e.target.value)}
+                                placeholder="sk-..." 
+                                className="w-full p-2 border border-slate-300 rounded focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">Usaremos o modelo <b>gpt-4o-mini</b> ou similar para performance e economia. Sua chave fica salva no seu navegador.</p>
+                        </div>
+                    )}
+
+                    {aiProvider === 'gemini' && (
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Chave de API Gemini (Opcional)</label>
+                            <input 
+                                type="password" 
+                                value={geminiKey}
+                                onChange={(e) => setGeminiKey(e.target.value)}
+                                placeholder="Padrão do Sistema..." 
+                                className="w-full p-2 border border-slate-300 rounded focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">Deixe em branco para usar a cota limite gratuita que vem embutida, ou coloque a sua (do Google AI Studio) caso esteja estourando o limite de 15 RPM.</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-slate-100 flex justify-end">
+                    <button 
+                        onClick={handleSaveSettings}
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-6 rounded transition"
+                    >
+                        Salvar e Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-8">

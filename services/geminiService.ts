@@ -1,11 +1,20 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
+import OpenAI from "openai";
 import { AIRealEstateContent, PropertyData } from "../types";
 
+export const getAIConfig = () => {
+    const provider = localStorage.getItem('ai_provider') || 'gemini';
+    const openaiKey = localStorage.getItem('openai_api_key') || '';
+    const customGeminiKey = localStorage.getItem('gemini_api_key') || '';
+    return { provider, openaiKey, customGeminiKey };
+};
+
 const getAI = () => {
-  const apiKey = (window as any).ENV?.VITE_GEMINI_API_KEY && (window as any).ENV.VITE_GEMINI_API_KEY !== '__VITE_GEMINI_API_KEY__'
+  const customKey = localStorage.getItem('gemini_api_key');
+  const apiKey = customKey || ((window as any).ENV?.VITE_GEMINI_API_KEY && (window as any).ENV.VITE_GEMINI_API_KEY !== '__VITE_GEMINI_API_KEY__'
     ? (window as any).ENV.VITE_GEMINI_API_KEY
-    : (import.meta as any).env.VITE_GEMINI_API_KEY || '';
+    : (import.meta as any).env.VITE_GEMINI_API_KEY || '');
   return new GoogleGenAI({ apiKey });
 };
 
@@ -43,7 +52,7 @@ const imageToPart = (base64Data: string) => {
 
 export const parseRawListing = async (rawText: string): Promise<PropertyData | null> => {
   try {
-    const ai = getAI();
+    const config = getAIConfig();
     const prompt = `
       Analise este texto bruto e extraia os dados do imóvel. 
       O texto pode ser um anúncio de marketing OU uma tabela de preços.
@@ -58,68 +67,84 @@ export const parseRawListing = async (rawText: string): Promise<PropertyData | n
       Texto: "${rawText}"
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            price: { type: Type.STRING },
-            location: { type: Type.STRING },
-            features: { type: Type.STRING },
-            description: { type: Type.STRING },
-            units: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  unit: { type: Type.STRING },
-                  floor: { type: Type.STRING },
-                  view: { type: Type.STRING },
-                  area: { type: Type.STRING },
-                  status: { type: Type.STRING },
-                  price: { type: Type.STRING },
-                  paymentPlan: {
-                    type: Type.OBJECT,
-                    properties: {
-                      ato: { type: Type.STRING },
-                      sinal: { type: Type.STRING },
-                      mensais: { type: Type.STRING },
-                      semestrais: { type: Type.STRING },
-                      financiamento: { type: Type.STRING }
-                    }
-                  }
-                }
-              }
-            },
-            aiContent: {
+    let data: any = {};
+
+    if (config.provider === 'openai' && config.openaiKey) {
+        const openai = new OpenAI({ apiKey: config.openaiKey, dangerouslyAllowBrowser: true });
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                { role: "system", content: "Extraia os dados em JSON de acordo com o pedido. O schema deve conter title, price, location, features, description, units, e aiContent." },
+                { role: "user", content: prompt }
+            ],
+            response_format: { type: "json_object" }
+        });
+        data = JSON.parse(response.choices[0].message.content || '{}');
+    } else {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-pro',
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
               type: Type.OBJECT,
               properties: {
-                marketingTitle: { type: Type.STRING },
-                headline: { type: Type.STRING },
-                coverHighlights: { type: Type.ARRAY, items: { type: Type.STRING } },
-                sections: {
+                title: { type: Type.STRING },
+                price: { type: Type.STRING },
+                location: { type: Type.STRING },
+                features: { type: Type.STRING },
+                description: { type: Type.STRING },
+                units: {
                   type: Type.ARRAY,
                   items: {
                     type: Type.OBJECT,
                     properties: {
-                      title: { type: Type.STRING },
-                      content: { type: Type.ARRAY, items: { type: Type.STRING } },
-                      isList: { type: Type.BOOLEAN }
+                      unit: { type: Type.STRING },
+                      floor: { type: Type.STRING },
+                      view: { type: Type.STRING },
+                      area: { type: Type.STRING },
+                      status: { type: Type.STRING },
+                      price: { type: Type.STRING },
+                      paymentPlan: {
+                        type: Type.OBJECT,
+                        properties: {
+                          ato: { type: Type.STRING },
+                          sinal: { type: Type.STRING },
+                          mensais: { type: Type.STRING },
+                          semestrais: { type: Type.STRING },
+                          financiamento: { type: Type.STRING }
+                        }
+                      }
+                    }
+                  }
+                },
+                aiContent: {
+                  type: Type.OBJECT,
+                  properties: {
+                    marketingTitle: { type: Type.STRING },
+                    headline: { type: Type.STRING },
+                    coverHighlights: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    sections: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          title: { type: Type.STRING },
+                          content: { type: Type.ARRAY, items: { type: Type.STRING } },
+                          isList: { type: Type.BOOLEAN }
+                        }
+                      }
                     }
                   }
                 }
               }
             }
           }
-        }
-      }
-    });
+        });
+        data = JSON.parse(response.text || '{}');
+    }
 
-    const data = JSON.parse(response.text || '{}');
     return {
       title: sanitizeForPDF(data.title),
       price: sanitizeForPDF(data.price),
@@ -168,12 +193,8 @@ export const generatePDFContent = async (
     images: string[] = [] 
 ): Promise<AIRealEstateContent | null> => {
   try {
-    const ai = getAI();
+    const config = getAIConfig();
     const parts: any[] = [];
-    
-    // IMAGE UPLOAD DISABLED FOR TOKEN SAVING:
-    // We are no longer sending images.slice(0, 4) to Gemini to prevent massive
-    // token exhaustion. The PDF generation relies entirely on the extracted text.
 
     const textPrompt = `
       Gere o conteúdo da Ficha Técnica Imobiliária.
@@ -202,36 +223,51 @@ export const generatePDFContent = async (
     `;
 
     parts.push({ text: textPrompt });
+    let data: any = {};
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro', 
-      contents: { parts: parts },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            marketingTitle: { type: Type.STRING },
-            headline: { type: Type.STRING },
-            coverHighlights: { type: Type.ARRAY, items: { type: Type.STRING } },
-            sections: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  content: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  isList: { type: Type.BOOLEAN }
+    if (config.provider === 'openai' && config.openaiKey) {
+        const openai = new OpenAI({ apiKey: config.openaiKey, dangerouslyAllowBrowser: true });
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o", // Using gpt-4o here for better writing vs 4o-mini
+            messages: [
+                { role: "system", content: SYSTEM_INSTRUCTION + "\n\nResponda APENAS com um objeto JSON correspondendo à ESTRUTURA OBRIGATÓRIA solicitada." },
+                { role: "user", content: textPrompt }
+            ],
+            response_format: { type: "json_object" }
+        });
+        data = JSON.parse(response.choices[0].message.content || '{}');
+    } else {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-pro', 
+          contents: { parts: parts },
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                marketingTitle: { type: Type.STRING },
+                headline: { type: Type.STRING },
+                coverHighlights: { type: Type.ARRAY, items: { type: Type.STRING } },
+                sections: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      title: { type: Type.STRING },
+                      content: { type: Type.ARRAY, items: { type: Type.STRING } },
+                      isList: { type: Type.BOOLEAN }
+                    }
+                  }
                 }
               }
             }
           }
-        }
-      }
-    });
+        });
+        data = JSON.parse(response.text || '{}');
+    }
 
-    const data = JSON.parse(response.text || '{}');
     return {
       marketingTitle: sanitizeForPDF(data.marketingTitle),
       headline: sanitizeForPDF(data.headline),
