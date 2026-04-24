@@ -71,10 +71,30 @@ export const parseRawListing = async (rawText: string): Promise<PropertyData | n
 
     if (config.provider === 'openai' && config.openaiKey) {
         const openai = new OpenAI({ apiKey: config.openaiKey, dangerouslyAllowBrowser: true });
+        const jsonSchemaText = `
+Retorne o resultado EXATAMENTE neste schema em formato JSON:
+{
+  "title": "",
+  "price": "",
+  "location": "",
+  "features": "",
+  "description": "",
+  "units": [
+    {
+      "unit": "", "floor": "", "view": "", "area": "", "status": "", "price": "",
+      "paymentPlan": { "ato": "", "sinal": "", "mensais": "", "semestrais": "", "financiamento": "" }
+    }
+  ],
+  "aiContent": {
+    "marketingTitle": "", "headline": "", "coverHighlights": ["", "", "", ""],
+    "sections": [ { "title": "", "content": [""], "isList": false } ]
+  }
+}
+        `;
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
-                { role: "system", content: "Extraia os dados em JSON de acordo com o pedido. O schema deve conter title, price, location, features, description, units, e aiContent." },
+                { role: "system", content: "Extraia os dados em JSON de acordo com o pedido. " + jsonSchemaText },
                 { role: "user", content: prompt }
             ],
             response_format: { type: "json_object" }
@@ -227,10 +247,21 @@ export const generatePDFContent = async (
 
     if (config.provider === 'openai' && config.openaiKey) {
         const openai = new OpenAI({ apiKey: config.openaiKey, dangerouslyAllowBrowser: true });
+        
+        const jsonSchemaText = `
+Retorne o resultado EXATAMENTE neste schema em formato JSON:
+{
+  "marketingTitle": "",
+  "headline": "",
+  "coverHighlights": ["", "", "", ""],
+  "sections": [ { "title": "", "content": ["", ""], "isList": false } ]
+}
+        `;
+
         const response = await openai.chat.completions.create({
             model: "gpt-4o", // Using gpt-4o here for better writing vs 4o-mini
             messages: [
-                { role: "system", content: SYSTEM_INSTRUCTION + "\n\nResponda APENAS com um objeto JSON correspondendo à ESTRUTURA OBRIGATÓRIA solicitada." },
+                { role: "system", content: SYSTEM_INSTRUCTION + "\n\nResponda APENAS com um objeto JSON correspondendo à ESTRUTURA OBRIGATÓRIA solicitada. " + jsonSchemaText },
                 { role: "user", content: textPrompt }
             ],
             response_format: { type: "json_object" }
