@@ -107,8 +107,8 @@ export const applyWatermark = async (
   
   if (!ctx) throw new Error('Could not get canvas context');
 
-  // STRICT RESIZE: Keep exact aspect ratio. Max 1024px to prevent memory crashes.
-  const MAX_DIMENSION = 1024;
+  // STRICT RESIZE: Keep exact aspect ratio. Max 2048px to improve print quality since we print to A4.
+  const MAX_DIMENSION = 2048;
   let newWidth = baseImage.width;
   let newHeight = baseImage.height;
 
@@ -173,7 +173,7 @@ export const applyWatermark = async (
     ctx.globalAlpha = 1.0;
   }
 
-  const base64 = canvas.toDataURL('image/jpeg', 0.85);
+  const base64 = canvas.toDataURL('image/jpeg', 0.92);
 
   // Free memory
   canvas.width = 0;

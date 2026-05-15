@@ -31,13 +31,13 @@ const sanitizeForPDF = (text: string | undefined | null): string => {
 
 const SYSTEM_INSTRUCTION = `
 Você é um Copywriter Imobiliário de Elite, focado em transformar dados brutos em fichas técnicas extensivas e luxuosas.
-Sua missão primária é REPASSAR TODAS AS INFORMAÇÕES TÉCNICAS. Não presuma, não invente, apenas organize e aprimore o que lhe for dado.
+Sua missão primária é REPASSAR TODAS AS INFORMAÇÕES TÉCNICAS que foram enviadas pelo usuário, sem adicionar nada externo.
 
 DIRETRIZES RÍGIDAS DE QUALIDADE E PRESERVAÇÃO DE DADOS:
-1. **EXAUSTIVIDADE (CRÍTICO):** O cliente exige absolutamente TUDO que houver no arquivo original na ficha gerada. Se houverem 50 itens de lazer, você deve colocar os 50 em uma lista. NÃO CORTAR NENHUMA INFORMAÇÃO.
-2. **FIDELIDADE ABSOLUTA E ZERO ALUCINAÇÃO:** NUNCA invente ou adicione espaços de lazer (como Rooftop, Spa, Quadras) se não estiverem EXATAMENTE ESCRITOS E CONTEXTUALIZADOS no texto fonte. Use apenas os nomes exatos fornecidos. NÃO junte itens separados (ex: não crie "opção de rooftop e spa" se não estiver escrito assim).
-3. **VOLUME E ESTRUTURA:** Use bastante texto nas descrições de "Sobre o Imóvel" e use enormes "Bullet points" (listas) para os itens e características técnicas. Quebre a resposta em pelo menos 3 a 4 seções grandes.
-4. **TIPOLOGIAS E PLANTAS (CRÍTICO):** Sempre liste detalhadamente os tipos de unidades disponíveis (ex: 1 quarto, 2 suítes, etc) com suas respectivas metragens e características individuais (piscina privativa, garden, etc). NUNCA omita os tipos de plantas!
+1. **FIDELIDADE ABSOLUTA E ZERO ALUCINAÇÃO (CRÍTICO):** NUNCA invente, presuma, adicione espaços de lazer (como Rooftop, Spa, Quadras) ou crie benefícios (como selo azul, se não foi explicitamente solicitado, ou detalhes que não constam). Use APENAS o que foi informado no texto original. NÃO escreva o que não está lá.
+2. **NÃO OMITA NADA:** O cliente exige absolutamente TUDO que houver no arquivo original na ficha gerada. Não resuma removendo itens. Se há uma lista de 10 coisas, inclua as 10 coisas.
+3. **VOLUME E ESTRUTURA:** Use uma linguagem requintada, mas restrinja-se aos FATOS e DADOS fornecidos. Crie seções (ex: "Sobre o Condomínio", "Lazer", "Pagamento").
+4. **TIPOLOGIAS E PLANTAS:** Sempre liste detalhadamente metragens e valores (ex: lotes a partir de 360m², valor R$ 315.000,00 parcelado em 100x).
 `;
 
 // Helper to convert base64 data URL to Gemini Part
@@ -111,7 +111,7 @@ Retorne o resultado EXATAMENTE neste schema em formato JSON:
     if (!useOpenAi) {
         const ai = getAI();
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-pro',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
             responseMimeType: "application/json",
@@ -286,7 +286,7 @@ Retorne o resultado EXATAMENTE neste schema em formato JSON:
     if (!useOpenAi) {
         const ai = getAI();
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-pro', 
+          model: 'gemini-2.5-flash', 
           contents: { parts: parts },
           config: {
             systemInstruction: SYSTEM_INSTRUCTION,
@@ -336,7 +336,7 @@ export const enhanceImageWithAI = async (base64Image: string): Promise<string | 
   try {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-2.5-flash',
       contents: {
         parts: [
           { inlineData: { data: base64Image.split(',')[1], mimeType: 'image/jpeg' } },
@@ -388,7 +388,7 @@ export const filterRealEstateImages = async (base64Images: string[]): Promise<nu
     });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: { parts },
       config: {
         responseMimeType: "application/json",
@@ -448,7 +448,7 @@ export const rankRealEstateImages = async (base64Images: string[]): Promise<numb
     });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: { parts },
       config: {
         responseMimeType: "application/json",

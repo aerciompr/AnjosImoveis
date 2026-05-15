@@ -3,8 +3,6 @@ import React, { useState } from 'react';
 import { PropertyData, PrintableImage } from '../types';
 import { ArrowLeft, CheckCircle2, X, Eye, Printer, Download, Loader2 } from 'lucide-react';
 import PrintLayout from './PrintLayout';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 
 interface StepPreviewProps {
   processedImages: PrintableImage[]; 
@@ -20,80 +18,32 @@ const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, 
 
   React.useEffect(() => {
     if (logo) setLogoUrl(URL.createObjectURL(logo));
-  }, [logo]);
+    
+    // Set document title cleanly for PDF saving without encoding issues
+    const originalTitle = document.title;
+    if (data.title || data.aiContent?.marketingTitle) {
+      const safeTitle = (data.aiContent?.marketingTitle || data.title || "Ficha_Imovel")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+        .replace(/[^a-zA-Z0-9 ]/g, " ") // Remove special chars
+        .replace(/\s+/g, "_")
+        .substring(0, 50);
+      document.title = safeTitle;
+    }
+    
+    return () => {
+        document.title = originalTitle;
+    };
+  }, [logo, data]);
 
   const handlePrint = () => {
-    window.print();
-  };
-
-  const handleDownload = async () => {
-    setIsGenerating(true);
-    try {
-        const printContainer = document.querySelector('.print-only-container') as HTMLElement;
-        if (!printContainer) return;
-
-        // Temporarily make it visible to capture
-        printContainer.classList.remove('hidden');
-        printContainer.classList.add('block');
-        
-        // Wait a frame for rendering
-        await new Promise(r => setTimeout(r, 100));
-
-        const pages = printContainer.querySelectorAll('.pdf-page');
-        
-        // Handle first page orientation based on its class
-        const firstPageLandscape = pages[0]?.classList.contains('is-landscape') || false;
-        const pdf = new jsPDF({ 
-            orientation: firstPageLandscape ? 'l' : 'p', 
-            unit: 'mm', 
-            format: 'a4' 
-        });
-
-        for (let i = 0; i < pages.length; i++) {
-            const pageEl = pages[i] as HTMLElement;
-            const isLandscape = pageEl.classList.contains('is-landscape');
-            
-            if (i > 0) {
-                // Add new page with correct orientation
-                pdf.addPage('a4', isLandscape ? 'l' : 'p');
-            }
-            
-            // Capture high resolution
-            const canvas = await html2canvas(pageEl, {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                allowTaint: true
-            });
-            
-            const imgData = canvas.toDataURL('image/jpeg', 0.95);
-            
-            // Width and Height in mm for the current page orientation
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-        }
-
-        // Hide it back
-        printContainer.classList.add('hidden');
-        printContainer.classList.remove('block');
-
-        const safeTitle = data.title ? data.title.replace(/[^a-zA-Z0-9]/g, '_') : 'Ficha_Imovel';
-        pdf.save(`${safeTitle.substring(0, 30)}.pdf`);
-        
-    } catch (error) {
-        console.error("Error generating PDF", error);
-        alert("Ocorreu um erro ao gerar o PDF. Tente imprimir a tela.");
-        
-        const printContainer = document.querySelector('.print-only-container') as HTMLElement;
-        if (printContainer) {
-            printContainer.classList.add('hidden');
-            printContainer.classList.remove('block');
-        }
-    } finally {
-        setIsGenerating(false);
+    // Check if running inside AI Studio iframe
+    if (window.self !== window.top) {
+        alert("O navegador bloqueia o download de arquivos dentro desta pré-visualização.\n\nPara baixar seu PDF:\n1. Clique no ícone 'Open in New Tab' (↗️) no canto superior direito do painel ao lado.\n2. Na nova aba, conclua a geração normalmente!");
+        return;
     }
+
+    alert("Para garantir a ALTA QUALIDADE das imagens e textos, vamos usar a função nativa do seu navegador.\n\nNa próxima tela, selecione a opção 'Salvar como PDF' para baixar, ou escolha sua impressora.\n\nIMPORTANTE: Ative a opção 'Gráficos de plano de fundo' ou 'Background graphics' para exibir as cores corretas.");
+    window.print();
   };
 
   return (
@@ -130,26 +80,18 @@ const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, 
                       <div>
                           <h3 className="font-bold text-lg">Visualização Final</h3>
                           <p className="text-xs text-slate-400">
-                              Faça o <strong>Download</strong> em alta resolução ou imprima diretamente.
+                              Salve como PDF ou Imprima diretamente na impressora.
                           </p>
                       </div>
                   </div>
 
                   <div className="flex gap-3">
                       <button
-                          onClick={handleDownload}
-                          disabled={isGenerating}
-                          className="px-6 py-2 rounded-lg font-bold shadow-lg transition flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-70"
-                      >
-                          {isGenerating ? <Loader2 size={20} className="animate-spin"/> : <Download size={20} />}
-                          BAIXAR PDF
-                      </button>
-                      <button
                           onClick={handlePrint}
-                          className="px-6 py-2 rounded-lg font-bold shadow-lg transition flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                          className="px-6 py-2 rounded-lg font-bold shadow-lg transition flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                       >
-                          <Printer size={20}/>
-                          IMPRIMIR
+                          <Download size={20} />
+                          SALVAR PDF / IMPRIMIR
                       </button>
                   </div>
               </div>
@@ -181,7 +123,7 @@ const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, 
               <div className="p-8 space-y-6">
                   
                   <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg text-sm text-amber-900 mb-4 text-center">
-                      <strong>Dica:</strong> Você pode visualizar primeiro ou fazer o download direto do seu PDF.
+                      <strong>Aviso de Qualidade:</strong> O modo mais perfeito de salvar este arquivo é visualizando e usando a função "Salvar como PDF" do sistema.
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -194,12 +136,11 @@ const StepPreview: React.FC<StepPreviewProps> = ({ processedImages, logo, data, 
                       </button>
                       
                       <button
-                          onClick={handleDownload}
-                          disabled={isGenerating}
-                          className="w-full bg-blue-600 text-white text-lg font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition flex items-center justify-center gap-3 transform hover:scale-[1.01] disabled:opacity-70 disabled:scale-100"
+                          onClick={handlePrint}
+                          className="w-full bg-blue-600 text-white text-lg font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition flex items-center justify-center gap-3 transform hover:scale-[1.01]"
                       >
-                          {isGenerating ? <Loader2 size={24} className="animate-spin text-white"/> : <Download size={24} className="text-white"/>}
-                          BAIXAR PDF DIRETO
+                          <Printer size={24} className="text-white"/>
+                          IMPRIMIR / BAIXAR PDF
                       </button>
                   </div>
 
